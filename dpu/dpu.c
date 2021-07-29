@@ -37,7 +37,6 @@
 #include "common.h"
 
 /* Use blocks of 256 bytes */
-#define BLOCK_SIZE (256)
 
 // __dma_aligned uint8_t DPU_CACHES[NR_TASKLETS][BLOCK_SIZE];
 // __host dpu_results_t DPU_RESULTS;
@@ -46,86 +45,83 @@
 // __host uint64_t DPU_KILLED; // set to 1 to kill
 __host uint64_t DPU_ID;
 
-__host task DPU_RECEIVE_BUFFER[MAX_TASK_PER_DPU];
-__host uint64_t DPU_RECEIVE_BUFFER_CNT;
+__mram_noinit uint8_t DPU_RECEIVE_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
+__mram_noinit uint64_t DPU_RECEIVE_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
+__mram_noinit uint64_t DPU_RECEIVE_BUFFER_SIZE;
+__mram_noinit uint64_t DPU_RECEIVE_BUFFER_TASK_COUNT;
 
-__host task DPU_SEND_BUFFER[MAX_TASK_PER_DPU];
-__host uint64_t DPU_SEND_BUFFER_CNT;
+__mram_noinit uint8_t DPU_SEND_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
+__mram_noinit uint64_t DPU_SEND_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
+__mram_noinit uint64_t DPU_SEND_BUFFER_SIZE;
+__mram_noinit uint64_t DPU_SEND_BUFFER_TASK_COUNT;
 
-__mram_noinit uint8_t DPU_BUFFER[BUFFER_SIZE];
+// __mram_noinit uint8_t DPU_BUFFER[BUFFER_SIZE];
 
+void twoval(twoval_task* tt, int i) {
+    // printf("%d %lu %lu\n", i, tt->a[0], tt->a[1]);
+    assert(tt->a[1] == tt->a[0] + 1);
+}
 
+void threeval(threeval_task* tt, int i) {
+    assert(tt->a[1] == tt->a[0] + 2);
+    assert(tt->a[2] == tt->a[1] + 2);
+    // printf("%d %lu %lu %lu\n", i, tt->a[0], tt->a[1], tt->a[2]);
+}
 
-/**
- * @fn main
- * @brief main function executed by each tasklet
- * @return the checksum result
- */
+void execute(__mram_ptr task *t, int i) {
+    // printf("EXEC ");
+    if (t->type == 0) {
+        // printf("UPPER INSERT\n");
+        // assert(DPU_RECEIVE_BUFFER_OFFSET[])
+        twoval_task tt;
+        mram_read(t->buffer, &tt, sizeof(twoval_task));
+        twoval(&tt, i);
+    } else if (t->type == 1) {
+        // printf("LOWER INIT\n");
+        threeval_task tt;
+        mram_read(t->buffer, &tt, sizeof(threeval_task));
+        threeval(&tt, i);
+    } else {
+        // printf("UNKNOWN TYPE %d\n", t->type);
+        assert(false);
+    }
+}
+
 int main()
 {
     uint32_t tasklet_id = me();
     if (tasklet_id == 0) {
         printf("%lu\n", DPU_ID);
-        printf("%lu\n", DPU_RECEIVE_BUFFER_CNT);
-        printf("%lx\n", &DPU_ID);
-        printf("%lx\n", &(DPU_RECEIVE_BUFFER[0]));
-        printf("%lx\n", &DPU_RECEIVE_BUFFER_CNT);
-        printf("%lx\n", &(DPU_BUFFER[0]));
-        DPU_SEND_BUFFER_CNT = DPU_RECEIVE_BUFFER_CNT;
-    //     printf("%lu\n", DPU_KILLED);
+        // printf("** %d %d %d\n", sizeof(uint64_t), sizeof(unsigned long long), sizeof(unsigned long));
+    }
+    
+    uint32_t lft = DPU_RECEIVE_BUFFER_TASK_COUNT * tasklet_id / NR_TASKLETS;
+    uint32_t rt = DPU_RECEIVE_BUFFER_TASK_COUNT * (tasklet_id + 1) / NR_TASKLETS;
+
+    for (uint32_t i = lft; i < rt; i++) {
+        __mram_ptr task *t = (__mram_ptr task*)(DPU_RECEIVE_BUFFER + DPU_RECEIVE_BUFFER_OFFSET[i]);
+        execute(t, i);
     }
 
-    int lft = DPU_RECEIVE_BUFFER_CNT * tasklet_id / NR_TASKLETS;
-    int rt = DPU_RECEIVE_BUFFER_CNT * (tasklet_id + 1) / NR_TASKLETS;
-    if (rt > DPU_RECEIVE_BUFFER_CNT) {
-        rt = DPU_RECEIVE_BUFFER_CNT;
-    }
+    
 
-    // bool failed = false;
-    for (int i = lft; i < rt; i ++) {
-        task *t = &DPU_RECEIVE_BUFFER[i];
-        if (t->order[t->nxt] != DPU_ID) {
-            printf("id != nxt ERROR!!\n");
-            // failed = true;
-        }
-        t->nxt ++;
-        DPU_SEND_BUFFER[i] = DPU_RECEIVE_BUFFER[i];
-    }
-
-    // printf("%d, l = %d, r = %d, Succeed = %d\n", NR_TASKLETS, lft, rt, !failed);
-
-    // while (!DPU_KILLED) {
+    // for (int i = 0; i < DPU_RECEIVE_BUFFER_TASK_COUNT; i ++)
+    // int lft = DPU_RECEIVE_BUFFER_CNT * tasklet_id / NR_TASKLETS;
+    // int rt = DPU_RECEIVE_BUFFER_CNT * (tasklet_id + 1) / NR_TASKLETS;
+    // if (rt > DPU_RECEIVE_BUFFER_CNT) {
+    //     rt = DPU_RECEIVE_BUFFER_CNT;
     // }
 
+    // // bool failed = false;
+    // for (int i = lft; i < rt; i ++) {
 
-    // DPU_CACHES;
-    // DPU_RESULTS;
-    // DPU_BUFFER;
-    // uint8_t *cache = DPU_CACHES[tasklet_id];
-    // dpu_result_t *result = &DPU_RESULTS.tasklet_result[tasklet_id];
-    // uint32_t checksum = 0;
-
-    // /* Initialize once the cycle counter */
-    // if (tasklet_id == 0)
-    //     perfcounter_config(COUNT_CYCLES, true);
-
-    // // for (uint32_t buffer_idx = tasklet_id * BLOCK_SIZE; buffer_idx < BUFFER_SIZE; buffer_idx += (NR_TASKLETS * BLOCK_SIZE))
-    // {
-
-    // //     /* load cache with current mram block. */
-    // //     mram_read(&DPU_BUFFER[buffer_idx], cache, BLOCK_SIZE);
-
-    // //     /* computes the checksum of a cached block */
-    // //     for (uint32_t cache_idx = 0; cache_idx < BLOCK_SIZE; cache_idx++) {
-    // //         checksum += cache[cache_idx];
-    // //     }
-    // // }
-
-    // /* keep the 32-bit LSB on the 64-bit cycle counter */
-    // result->cycles = (uint32_t)perfcounter_get();
-    // result->checksum = checksum;
-
-    // printf("[%02d] Checksum = 0x%08x\n", tasklet_id, result->checksum);
-    // printf("Finished! %d %d %d\n", *(int*)DPU_CACHES, *(int*)&DPU_RESULTS, *(int*)DPU_BUFFER);
+    //     task *t = &DPU_RECEIVE_BUFFER[i];
+    //     if (t->order[t->nxt] != DPU_ID) {
+    //         printf("id != nxt ERROR!!\n");
+    //         // failed = true;
+    //     }
+    //     t->nxt ++;
+    //     DPU_SEND_BUFFER[i] = DPU_RECEIVE_BUFFER[i];
+    // }
     return 0;
 }
