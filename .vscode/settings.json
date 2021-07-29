@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "cassert": "c",
-        "memory": "c",
-        "optional": "c",
-        "iterator": "c"
-    }
-}
