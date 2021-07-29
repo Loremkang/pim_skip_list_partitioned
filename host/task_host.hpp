@@ -11,6 +11,7 @@
 #include "common.h"
 using namespace std;
 
+extern uint32_t nr_of_dpus;
 
 static uint8_t send_buffer[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU];
 static uint64_t send_buffer_offset[MAX_DPU][MAX_TASK_COUNT_PER_DPU];
@@ -31,16 +32,24 @@ inline void init_send_buffer() {
 }
 
 inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
-    send_buffer_mutex[nodeid].lock();
-    assert(send_buffer_size[nodeid] + length + sizeof(uint64_t) <= MAX_TASK_BUFFER_SIZE_PER_DPU);
-    assert(send_buffer_task_count[nodeid] + 1 <= MAX_TASK_COUNT_PER_DPU);
-    uint8_t* pos = &send_buffer[nodeid][0] + send_buffer_size[nodeid];
-    send_buffer_offset[nodeid][send_buffer_task_count[nodeid] ++] = send_buffer_size[nodeid];
+    if (nodeid == -1) {
+        for (uint32_t target = 0; target < nr_of_dpus; target++) {
+            push_task(target, type, buffer, length);
+        }
+    } else {
+        send_buffer_mutex[nodeid].lock();
+        assert(send_buffer_size[nodeid] + length + sizeof(uint64_t) <=
+               MAX_TASK_BUFFER_SIZE_PER_DPU);
+        assert(send_buffer_task_count[nodeid] + 1 <= MAX_TASK_COUNT_PER_DPU);
+        uint8_t* pos = &send_buffer[nodeid][0] + send_buffer_size[nodeid];
+        send_buffer_offset[nodeid][send_buffer_task_count[nodeid]++] =
+            send_buffer_size[nodeid];
 
-    memcpy(pos, &type, sizeof(uint64_t));
-    memcpy(pos + sizeof(uint64_t), buffer, length);
-    send_buffer_size[nodeid] += length + sizeof(uint64_t);
-    send_buffer_mutex[nodeid].unlock();
+        memcpy(pos, &type, sizeof(uint64_t));
+        memcpy(pos + sizeof(uint64_t), buffer, length);
+        send_buffer_size[nodeid] += length + sizeof(uint64_t);
+        send_buffer_mutex[nodeid].unlock();
+    }
 }
 
 inline bool send_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
@@ -84,8 +93,8 @@ inline bool send_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer_task_count[each_dpu]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU,
-                             XSTR(DPU_RECEIVE_BUFFER_TASK_COUNT), 0, sizeof(uint64_t),
-                             DPU_XFER_ASYNC));
+                             XSTR(DPU_RECEIVE_BUFFER_TASK_COUNT), 0,
+                             sizeof(uint64_t), DPU_XFER_ASYNC));
 
     DPU_ASSERT(dpu_sync(dpu_set));
 

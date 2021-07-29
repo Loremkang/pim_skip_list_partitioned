@@ -1,5 +1,8 @@
 #pragma once
 
+#include "task.h"
+#include "basic.h"
+#include "common_node.h"
 #define KHB_DEBUG
 
 #ifdef KHB_DEBUG
@@ -15,6 +18,7 @@
 #define MAX_TASK_BUFFER_SIZE_PER_DPU (1 << 20)
 #define MAX_TASK_COUNT_PER_DPU (1 << 12)
 #define MAX_TASK_SIZE (1 << 10)
+#define MAX_TOTAL_HEIGHT (30)
 
 /* DPU variable that will be read of write by the host */
 #define DPU_ID id
@@ -37,6 +41,6 @@
 
 /* Size of the buffer on which the checksum will be performed */
 #define BUFFER_SIZE (200)
+#define LOWER_PART_HEIGHT (6)
 
 /* Structure used by both the host and the dpu to communicate information */
-#include "task.h"
