@@ -3,7 +3,7 @@
 #include "common.h"
 #include "l3.h"
 
-inline void L3_insert(L3_insert_task *tit) {
+void L3_insert(L3_insert_task *tit) {
     uint32_t actual_size;
     mL3ptr newnode = get_new_L3(tit->key, tit->height,
                                tit->addr, &actual_size);

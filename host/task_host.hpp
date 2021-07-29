@@ -52,7 +52,7 @@ inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
     }
 }
 
-inline bool send_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
+inline bool send_task(struct dpu_set_t &dpu_set, int nr_of_dpus) {
     uint32_t each_dpu;
     struct dpu_set_t dpu;
 
@@ -72,8 +72,10 @@ inline bool send_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer[each_dpu][0]));
     }
+    printf("%s\n", XSTR(DPU_RECEIVE_BUFFER));
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, XSTR(DPU_RECEIVE_BUFFER),
                              0, maxsize, DPU_XFER_ASYNC));
+    exit(-1);
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer_offset[each_dpu][0]));

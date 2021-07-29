@@ -30,6 +30,10 @@
  */
 #include <stdint.h>
 #include <stdio.h>
+#include <defs.h>
+#include <mram.h>
+#include <perfcounter.h>
+#include <string.h>
 #include "common.h"
 #include "task_dpu.h"
 #include "l3.h"
