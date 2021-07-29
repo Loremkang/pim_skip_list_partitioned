@@ -28,6 +28,7 @@ extern "C" {
 #include <cstring>
 #include <cstdbool>
 #include <iostream>
+#include <parlay/parallel.h>
 #include "task_host.hpp"
 
 #include "common.h"
@@ -84,19 +85,20 @@ int main()
     }
 
     init_send_buffer();
-    for (int i = 0; i < (1 << 15); i ++) {
+    int cnt = 0;
+    parlay::parallel_for(0, (1 << 10), [&](size_t i) {
         int target = rand() % nr_of_dpus;
         int task_type = rand() % 2;
         if (task_type == 0) {
             twoval a;
-            a.a[0] = i; a.a[1] = i + 1;
+            a.a[0] = i; a.a[1] = cnt;
             push_task(target, task_type, &a, sizeof(twoval));
         } else if (task_type == 1) {
             threeval a;
-            a.a[0] = i; a.a[1] = i + 2; a.a[2] = i + 4;
+            a.a[0] = i; a.a[1] = i + 2; a.a[2] = cnt;
             push_task(target, task_type, &a, sizeof(threeval));
         }
-    }
+    });
     exec(dpu_set, nr_of_dpus);
     print_log(dpu_set);
 

@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdbool>
 #include <algorithm>
+#include <mutex>
 #include "common.h"
 using namespace std;
 
@@ -15,6 +16,7 @@ static uint8_t send_buffer[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU];
 static uint64_t send_buffer_offset[MAX_DPU][MAX_TASK_COUNT_PER_DPU];
 static uint64_t send_buffer_size[MAX_DPU];
 static uint64_t send_buffer_task_count[MAX_DPU];
+static mutex send_buffer_mutex[MAX_DPU];
 
 static uint8_t receive_buffer[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU];
 static uint64_t receive_buffer_offset[MAX_DPU][MAX_TASK_COUNT_PER_DPU];
@@ -29,6 +31,7 @@ inline void init_send_buffer() {
 }
 
 inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
+    send_buffer_mutex[nodeid].lock();
     assert(send_buffer_size[nodeid] + length + sizeof(uint64_t) <= MAX_TASK_BUFFER_SIZE_PER_DPU);
     assert(send_buffer_task_count[nodeid] + 1 <= MAX_TASK_COUNT_PER_DPU);
     uint8_t* pos = &send_buffer[nodeid][0] + send_buffer_size[nodeid];
@@ -37,6 +40,7 @@ inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
     memcpy(pos, &type, sizeof(uint64_t));
     memcpy(pos + sizeof(uint64_t), buffer, length);
     send_buffer_size[nodeid] += length + sizeof(uint64_t);
+    send_buffer_mutex[nodeid].unlock();
 }
 
 inline bool send_task(struct dpu_set_t dpu_set, int nr_of_dpus) {

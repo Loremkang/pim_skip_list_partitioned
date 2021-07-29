@@ -58,14 +58,14 @@ __mram_noinit uint64_t DPU_SEND_BUFFER_TASK_COUNT;
 // __mram_noinit uint8_t DPU_BUFFER[BUFFER_SIZE];
 
 void twoval(twoval_task* tt, int i) {
-    // printf("%d %lu %lu\n", i, tt->a[0], tt->a[1]);
-    assert(tt->a[1] == tt->a[0] + 1);
+    printf("%d %lu %lu\n", i, tt->a[0], tt->a[1]);
+    // assert(tt->a[1] == tt->a[0] + 1);
 }
 
 void threeval(threeval_task* tt, int i) {
     assert(tt->a[1] == tt->a[0] + 2);
-    assert(tt->a[2] == tt->a[1] + 2);
-    // printf("%d %lu %lu %lu\n", i, tt->a[0], tt->a[1], tt->a[2]);
+    // assert(tt->a[2] == tt->a[1] + 2);
+    printf("%d %lu %lu %lu\n", i, tt->a[0], tt->a[1], tt->a[2]);
 }
 
 void execute(__mram_ptr task *t, int i) {
