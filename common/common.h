@@ -15,8 +15,8 @@
 #define STR(x) #x
 
 #define MAX_DPU (64)
-#define MAX_TASK_BUFFER_SIZE_PER_DPU (1 << 20)
-#define MAX_TASK_COUNT_PER_DPU (1 << 12)
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (1 << 12) // 4K
+#define MAX_TASK_COUNT_PER_DPU (1 << 8) // 256
 #define MAX_TASK_SIZE (1 << 10)
 #define MAX_TOTAL_HEIGHT (30)
 
@@ -42,5 +42,7 @@
 /* Size of the buffer on which the checksum will be performed */
 #define BUFFER_SIZE (200)
 #define LOWER_PART_HEIGHT (6)
+#define VALUE_LIMIT (1000000000)
+#define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU / 8)
 
 /* Structure used by both the host and the dpu to communicate information */

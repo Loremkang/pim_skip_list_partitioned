@@ -29,12 +29,12 @@ extern mL3ptr root;
 // __mram_ptr uint8_t* l1ht[LX_HASHTABLE_SIZE];
 // __mram_ptr uint8_t* l0ht[LX_HASHTABLE_SIZE];
 
-inline void ht_insert(__mram_ptr uint64_t* ht, uint32_t pos, uint64_t val) {
+static inline void ht_insert(__mram_ptr uint64_t* ht, uint32_t pos, uint64_t val) {
     while (ht[pos] != 0) pos ++;
     ht[pos] = val;
 }
 
-inline mL3ptr ht_get_L3(int64_t key) {
+static inline mL3ptr ht_get_L3(int64_t key) {
     int ipos = hash_to_addr(key, 0, LX_HASHTABLE_SIZE);
     int pos = ipos;
     while (true) {
@@ -50,7 +50,7 @@ inline mL3ptr ht_get_L3(int64_t key) {
     }
 }
 
-inline L3node* init_L3(int64_t key, int height, pptr down, uint8_t* buffer) {
+static inline L3node* init_L3(int64_t key, int height, pptr down, uint8_t* buffer) {
     L3node *nn = (L3node*)buffer;
     nn->key = key;
     nn->height = height;
@@ -62,7 +62,7 @@ inline L3node* init_L3(int64_t key, int height, pptr down, uint8_t* buffer) {
     return nn;
 }
 
-inline mL3ptr apply_L3(L3node* wptr, uint32_t size) {
+static inline mL3ptr apply_L3(L3node* wptr, uint32_t size) {
     __mram_ptr void* mptr = l3buffer + l3cnt;
     // printf("applyL3 %x %x %u\n", wptr, mptr, size);
     mram_write((void*)wptr, mptr, size);
@@ -70,7 +70,7 @@ inline mL3ptr apply_L3(L3node* wptr, uint32_t size) {
     return mptr;
 }
 
-inline mL3ptr get_new_L3(int64_t key, int height, pptr down, uint32_t* actual_size) {
+static inline mL3ptr get_new_L3(int64_t key, int height, pptr down, uint32_t* actual_size) {
     uint8_t buffer[40 + sizeof(pptr) * 2 * MAX_TOTAL_HEIGHT];
     L3node* nn = init_L3(key, height, down, buffer);
     *actual_size = sizeof(L3node) + sizeof(pptr) * height * 2;

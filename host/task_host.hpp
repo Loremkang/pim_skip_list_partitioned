@@ -11,7 +11,9 @@
 #include "common.h"
 using namespace std;
 
-extern uint32_t nr_of_dpus;
+extern int nr_of_dpus;
+extern dpu_set_t dpu_set, dpu;
+extern uint32_t each_dpu;
 
 static uint8_t send_buffer[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU];
 static uint64_t send_buffer_offset[MAX_DPU][MAX_TASK_COUNT_PER_DPU];
@@ -33,7 +35,7 @@ inline void init_send_buffer() {
 
 inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
     if (nodeid == -1) {
-        for (uint32_t target = 0; target < nr_of_dpus; target++) {
+        for (int target = 0; target < nr_of_dpus; target++) {
             push_task(target, type, buffer, length);
         }
     } else {
@@ -52,10 +54,28 @@ inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
     }
 }
 
-inline bool send_task(struct dpu_set_t &dpu_set, int nr_of_dpus) {
-    uint32_t each_dpu;
-    struct dpu_set_t dpu;
+template <class F>
+inline void apply_to_all_reply(bool parallel, F f) {
+    if (parallel) {
+        parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+            for (int j = 0; j < (int)receive_buffer_task_count[i]; j++) {
+                task* t = (task*)(&receive_buffer[i][0] +
+                                  receive_buffer_offset[i][j]);
+                f(t);
+            }
+        });
+    } else {
+        for (int i = 0; i < nr_of_dpus; i++) {
+            for (int j = 0; j < (int)receive_buffer_task_count[i]; j++) {
+                task* t = (task*)(&receive_buffer[i][0] +
+                                  receive_buffer_offset[i][j]);
+                f(t);
+            }
+        }
+    }
+}
 
+inline bool send_task() {
     uint64_t maxsize = 0, maxcount = 0;
     for (int i = 0; i < nr_of_dpus; i++) {
         maxsize = max(maxsize, send_buffer_size[i]);
@@ -72,10 +92,8 @@ inline bool send_task(struct dpu_set_t &dpu_set, int nr_of_dpus) {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer[each_dpu][0]));
     }
-    printf("%s\n", XSTR(DPU_RECEIVE_BUFFER));
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, XSTR(DPU_RECEIVE_BUFFER),
                              0, maxsize, DPU_XFER_ASYNC));
-    exit(-1);
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer_offset[each_dpu][0]));
@@ -103,10 +121,7 @@ inline bool send_task(struct dpu_set_t &dpu_set, int nr_of_dpus) {
     return true;
 }
 
-inline bool receive_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
-    uint32_t each_dpu;
-    struct dpu_set_t dpu;
-
+inline bool receive_task() {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &receive_buffer_size[each_dpu]));
     }
@@ -153,18 +168,18 @@ inline bool receive_task(struct dpu_set_t dpu_set, int nr_of_dpus) {
     return true;
 }
 
-inline bool exec(struct dpu_set_t dpu_set, int nr_of_dpus) {
+inline bool exec() {
     memset(receive_buffer_size, 0, sizeof(receive_buffer_size));
     memset(receive_buffer_task_count, 0, sizeof(receive_buffer_task_count));
-    if (send_task(dpu_set, nr_of_dpus)) {
+    if (send_task()) {
         DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
-        return receive_task(dpu_set, nr_of_dpus);
+        return receive_task();
     } else {
         return false;
     }
 }
 
-inline void print_log(dpu_set_t dpu_set) {
+inline void print_log() {
     struct dpu_set_t dpu;
     DPU_FOREACH(dpu_set, dpu) { DPU_ASSERT(dpu_log_read(dpu, stdout)); }
 }

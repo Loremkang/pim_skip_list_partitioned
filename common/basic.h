@@ -27,15 +27,15 @@ inline void print_pptr(pptr x, char* str) { // ?? strange bug. need to copy befo
 //     uint8_t up_chain_height;
 // } node;
 
-inline int hh(int64_t key, uint64_t height, uint64_t M) {
+static inline int hh(int64_t key, uint64_t height, uint64_t M) {
     key = (key % M) * 47 + height;
     return (key * 23 + 17) % M;
 }
 
-inline int hash_to_dpu(int64_t key, uint64_t height, uint64_t M) {
+static inline int hash_to_dpu(int64_t key, uint64_t height, uint64_t M) {
     return hh(key, height, M);
 }
 
-inline int hash_to_addr(int64_t key, uint64_t height, uint64_t M) {
+static inline int hash_to_addr(int64_t key, uint64_t height, uint64_t M) {
     return hh(key, height, M);
 }

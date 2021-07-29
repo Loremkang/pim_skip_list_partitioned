@@ -1,3 +1,6 @@
 [submodule "parlaylib"]
 	path = parlaylib
 	url = https://github.com/cmuparlay/parlaylib.git
+[submodule "libcuckoo"]
+	path = libcuckoo
+	url = https://github.com/efficient/libcuckoo.git

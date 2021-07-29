@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
     int64_t key;
     pptr addr;
+    int64_t result_key;
 } L3_search_reply;
 
 typedef struct task {
