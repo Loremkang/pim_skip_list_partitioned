@@ -27,7 +27,7 @@ __dirs := $(shell mkdir -p ${BUILDDIR})
 OLD_COMMON_FLAGS := -Wall -Wextra -Werror -g -I${COMMON_INCLUDES}
 COMMON_FLAGS := -Wall -Wextra -g -I${COMMON_INCLUDES}
 HOST_FLAGS := ${COMMON_FLAGS} -std=c++17 -lpthread -I${HOST_DIR} -Iparlaylib/include -Ilibcuckoo -O3 `dpu-pkg-config --cflags --libs dpu` -DNR_TASKLETS=${NR_TASKLETS} -DNR_DPUS=${NR_DPUS}
-DPU_FLAGS := ${COMMON_FLAGS} -I${DPU_DIR} -DNR_TASKLETS=${NR_TASKLETS}
+DPU_FLAGS := ${COMMON_FLAGS} -O2 -I${DPU_DIR} -DNR_TASKLETS=${NR_TASKLETS}
 
 all: ${HOST_TARGET} ${DPU_TARGET}
 

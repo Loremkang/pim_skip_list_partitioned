@@ -71,7 +71,6 @@ void init_skiplist(uint32_t height) {
     printf("INIT UPPER PART -INF\n");
     ASSERT(exec());  // insert upper part -INF
     // print_log();
-    // exit(-1);
 }
 
 void predecessor(int length) {
@@ -122,22 +121,39 @@ bool predecessor_test(int length) {
         op_keys[i] = rand() % VALUE_LIMIT;
     }
     // sort(op_keys, op_keys + length);
+    cout << "\n*** Start Predecessor Test ***" << endl;
     predecessor(length);
-    // cout << "Predecessor: " << endl;
-    // for (int i = 0; i < length; i++) {
-    //     set<int64_t>::iterator it = golden_L3.upper_bound(op_keys[i]);
-    //     it--;
-    //     if (op_result[i] != *it) {
-    //         cout << op_keys[i] << ' ' << op_result[i] << ' ' << *it << endl;
-    //         return false;
-    //     }
-    // }
-    // cout << endl;
+
+    for_each(golden_L3.begin(), golden_L3.end(),
+             [&](int64_t v) { cout << "*" << v << endl; });
+    cout << endl;
+    for (int i = 0; i < length; i++) {
+        set<int64_t>::iterator it = golden_L3.upper_bound(op_keys[i]);
+        it--;
+        if (op_results[i] != *it) {
+            cout << op_keys[i] << ' ' << op_results[i] << ' ' << *it << endl;
+            return false;
+        }
+    }
+    cout << endl << "\n*** End Predecessor Test ***" << endl;
     return true;
 }
 
 void insert(int length) {
-
+    printf("\n*** Insert: L3 insert\n");
+    init_send_buffer();
+    for (int i = 0; i < length; i++) {
+        int h = 1;
+        while (rand() & 1) {
+            h++;
+        }
+        L3_insert_task tit =
+            (L3_insert_task){.key = op_keys[i], .addr = null_pptr, .height = h};
+        push_task(-1, L3_INSERT, &tit, sizeof(L3_insert_task));
+        printf("upper insert %ld %d-%x\n", op_keys[i], tit.addr.id,
+               tit.addr.addr);
+    }
+    exec();
 }
 
 void insert_test(int length) {
@@ -153,22 +169,27 @@ void insert_test(int length) {
 /**
  * @brief Main of the Host Application.
  */
-int main()
-{
+int main() {
     DPU_ASSERT(dpu_alloc(NR_DPUS, "backend=simulator", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 
-    DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t*)&nr_of_dpus));
+    DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
     printf("Allocated %d DPU(s)\n", nr_of_dpus);
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         uint64_t id = each_dpu;
         dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
     }
-    
-    init_skiplist(20);
 
-    predecessor_test(20);
+    init_skiplist(20);
+    golden_L3.insert(LLONG_MIN);
+    golden_L3.insert(LLONG_MAX);
+
+
+    for (int i = 0; i < 100; i ++) {
+        insert_test(50);
+        assert(predecessor_test(50));
+    }
 
     DPU_ASSERT(dpu_free(dpu_set));
     return 0;

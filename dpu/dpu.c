@@ -111,6 +111,8 @@ int main()
     uint32_t tasklet_id = me();
     if (tasklet_id == 0) {
         printf("%lu\n", DPU_ID);
+        // uint32_t mram_base_addr_A = (uint32_t)DPU_MRAM_HEAP_POINTER;
+        // printf("!!! %x\n", mram_base_addr_A);
         // printf("** %d %d %d\n", sizeof(uint64_t), sizeof(unsigned long long), sizeof(unsigned long));
         DPU_SEND_BUFFER_SIZE = DPU_SEND_BUFFER_TASK_COUNT = 0;
     }
