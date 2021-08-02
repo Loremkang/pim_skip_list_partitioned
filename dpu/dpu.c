@@ -56,10 +56,11 @@ __host uint64_t DPU_SEND_BUFFER_TASK_COUNT;
 
 
 // Node Buffers & Hash Tables
-__mram uint64_t l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
+__mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
 
 __mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
 __host int l3cnt = 8;
+__host int l3htcnt;
 
 __host mL3ptr root;
 
@@ -125,7 +126,7 @@ int main()
         mptask t = (mptask)(DPU_RECEIVE_BUFFER + DPU_RECEIVE_BUFFER_OFFSET[i]);
         execute(t);
     }
-    printf("l3cnt = %d\n", l3cnt);
+    printf("l3cnt=%d l3htcnt=%d\n", l3cnt, l3htcnt);
 
     
 

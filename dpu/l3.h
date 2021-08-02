@@ -5,10 +5,11 @@
 #include "storage.h"
 
 extern uint64_t DPU_ID;
-extern __mram_ptr uint64_t l3ht[]; 
+extern __mram_ptr ht_slot l3ht[]; 
 
 static inline void L3_init(L3_insert_task *tit) {
     assert(l3cnt == 8);
+    storage_init();
     uint32_t actual_size;
     root = get_new_L3(LLONG_MIN, tit->height, tit->addr, &actual_size);
     L3_insert_reply tir = (L3_insert_reply){.key = tit->key, .addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
@@ -29,7 +30,7 @@ static inline void L3_insert(L3_insert_task *tit) {
     int64_t ht = root->height - 1;
     while (ht >= 0) {
         pptr l = tmp->left[ht], r = tmp->right[ht];
-        mL3ptr ln = (mL3ptr)l.addr, rn = (mL3ptr)r.addr;
+        mL3ptr rn = (mL3ptr)r.addr;
         assert(l.id == DPU_ID || l.id == (uint32_t)-1);
         assert(r.id == DPU_ID || r.id == (uint32_t)-1);
         if (r.id != (uint32_t)-1 &&
@@ -58,12 +59,31 @@ static inline int64_t L3_search(L3_search_task *tst);
 
 // bool printtt;
 
+static inline int L3_ht_get(ht_slot v, int64_t key) {
+    if (v.v == 0) {
+        return -1;
+    }
+    mL3ptr np = (mL3ptr)v.v;
+    if (np->key == key) {
+        return 1;
+    }
+    return 0;
+}
+
 static inline void L3_remove(L3_remove_task *trt) {
-    mL3ptr tmp = ht_get_L3(trt->key);
+    uint32_t htv = ht_search(trt->key, L3_ht_get);
+    if (htv == (uint32_t)-1) {
+        assert(false);
+        return; // not found;
+    }
+    mL3ptr tmp = (mL3ptr)htv;
+
+    if (tmp == (uint32_t)-1)
+    // mL3ptr tmp = ht_get_L3(trt->key);
     assert(tmp->key == trt->key);
     for (int ht = 0; ht < tmp->height; ht++) {
         pptr l = tmp->left[ht], r = tmp->right[ht];
-        mL3ptr ln = l.addr, rn = r.addr;
+        mL3ptr ln = (mL3ptr)l.addr, rn = (mL3ptr)r.addr;
         assert(l.id != (uint32_t)-1);
         if (r.id != (uint32_t)-1) {
             assert(rn->left[ht].id == DPU_ID);
@@ -73,7 +93,8 @@ static inline void L3_remove(L3_remove_task *trt) {
         // tmp->left[ht] = null_pptr;
         // tmp->right[ht] = null_pptr;
     }
-    // ht_delete(l3ht, hash_to_addr(key, 0, LX_HASHTABLE_SIZE), (uint64_t)tmp);
+    // printf("\n\t%lld\n", trt->key);
+    ht_delete(l3ht, hash_to_addr(trt->key, 0, LX_HASHTABLE_SIZE), (uint32_t)tmp);
 }
 
 static inline int64_t L3_search(L3_search_task *tst) {

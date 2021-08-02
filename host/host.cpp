@@ -21,7 +21,7 @@
 
 #define __mram_ptr 
 
-bool print_debug = true;
+bool print_debug = false;
 
 extern "C" {
     #include <dpu.h>
@@ -86,14 +86,16 @@ int main() {
 
     insert_test(100);
     insert_test(100);
-    for (int i = 0; i < 100; i ++) {
-        insert_test(100);
+    insert_test(100);
+    insert_test(100);
+    insert_test(100);
+    for (int i = 0; i < 10; i ++) {
+        insert_test(50);
         assert(predecessor_test(100));
 
         remove_test(50);
     }
     
-
     assert(predecessor_test(10));
 
     return 0;

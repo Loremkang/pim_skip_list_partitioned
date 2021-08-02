@@ -11,7 +11,7 @@ using namespace std;
 int64_t randint64() {
     uint64_t v = rand();
     v = (v << 31) + rand();
-    v = (v << 31) + (rand() & 3);
+    v = (v << 3) + (rand() & 3);
     // printf("*%llu %llu %d\n", v, 1ull << 63, v >= (1ull << 63));
     if (v >= (1ull << 63)) {
         return v - (1ull << 63);

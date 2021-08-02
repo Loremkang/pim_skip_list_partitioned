@@ -181,5 +181,5 @@ inline bool exec() {
 
 inline void print_log() {
     struct dpu_set_t dpu;
-    DPU_FOREACH(dpu_set, dpu) { DPU_ASSERT(dpu_log_read(dpu, stdout)); }
+    DPU_FOREACH(dpu_set, dpu) { DPU_ASSERT(dpu_log_read(dpu, stdout)); break;}
 }
