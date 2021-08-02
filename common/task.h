@@ -8,6 +8,7 @@
 #define L3_INSERT 2
 #define L3_REMOVE 3
 #define L3_SEARCH 4
+#define L3_SANCHECK 5
 
 // #define LOWER_INIT 1
 // #define BUILD_UP_DOWN 3
@@ -46,6 +47,10 @@ typedef struct {
     pptr addr;
     int64_t result_key;
 } L3_search_reply;
+
+typedef struct {
+    int64_t nothing;
+} L3_sancheck_task;
 
 typedef struct task {
     uint64_t type;

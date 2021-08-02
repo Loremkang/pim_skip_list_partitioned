@@ -34,6 +34,11 @@ static inline void ht_insert(__mram_ptr uint64_t* ht, uint32_t pos, uint64_t val
     ht[pos] = val;
 }
 
+static inline void ht_delete(__mram_ptr uint64_t* ht, uint32_t pos, uint64_t val) {
+    while (ht[pos] != val) pos ++;
+    ht[pos] = 0;
+}
+
 static inline mL3ptr ht_get_L3(int64_t key) {
     int ipos = hash_to_addr(key, 0, LX_HASHTABLE_SIZE);
     int pos = ipos;

@@ -42,7 +42,6 @@
 /* Size of the buffer on which the checksum will be performed */
 #define BUFFER_SIZE (200)
 #define LOWER_PART_HEIGHT (6)
-#define VALUE_LIMIT (1000000000)
 #define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU / 8)
 
 /* Structure used by both the host and the dpu to communicate information */

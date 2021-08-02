@@ -95,10 +95,8 @@ void execute(mptask t) {
         L3_search_task tst;
         init_task(&tst, t->buffer, sizeof(L3_search_task));
         L3_search(&tst);
-    // } else if (t->type == L3_REMOVE) {
-    //     L3_remove_task trt;
-    //     mram_read(t->buffer, &trt, sizeof(L3_remove_task));
-    //     L3_remove(&trt, i);
+    } else if (t->type == L3_SANCHECK) {
+        L3_sancheck();
     } else {
         assert(false);
     }
@@ -115,6 +113,8 @@ int main()
         // printf("!!! %x\n", mram_base_addr_A);
         // printf("** %d %d %d\n", sizeof(uint64_t), sizeof(unsigned long long), sizeof(unsigned long));
         DPU_SEND_BUFFER_SIZE = DPU_SEND_BUFFER_TASK_COUNT = 0;
+    } else {
+        return 0;
     }
     
     uint32_t lft = DPU_RECEIVE_BUFFER_TASK_COUNT * tasklet_id / NR_TASKLETS;
@@ -125,6 +125,7 @@ int main()
         mptask t = (mptask)(DPU_RECEIVE_BUFFER + DPU_RECEIVE_BUFFER_OFFSET[i]);
         execute(t);
     }
+    printf("l3cnt = %d\n", l3cnt);
 
     
 
