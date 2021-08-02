@@ -97,14 +97,16 @@ inline bool send_task() {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer[each_dpu][0]));
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, XSTR(DPU_RECEIVE_BUFFER),
-                             0, maxsize, DPU_XFER_ASYNC));
+    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU,
+                             DPU_MRAM_HEAP_POINTER_NAME, DPU_RECEIVE_BUFFER,
+                             maxsize, DPU_XFER_ASYNC));
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &send_buffer_offset[each_dpu][0]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU,
-                             XSTR(DPU_RECEIVE_BUFFER_OFFSET), 0,
+                             DPU_MRAM_HEAP_POINTER_NAME,
+                             DPU_RECEIVE_BUFFER_OFFSET,
                              sizeof(uint64_t) * maxcount, DPU_XFER_ASYNC));
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
@@ -163,14 +165,14 @@ inline bool receive_task() {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &receive_buffer[each_dpu][0]));
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, XSTR(DPU_SEND_BUFFER),
-                             0, maxsize, DPU_XFER_ASYNC));
+    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, DPU_MRAM_HEAP_POINTER_NAME, DPU_SEND_BUFFER,
+                             maxsize, DPU_XFER_ASYNC));
 
     DPU_FOREACH(dpu_set, dpu, each_dpu) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, &receive_buffer_offset[each_dpu][0]));
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU,
-                             XSTR(DPU_SEND_BUFFER_OFFSET), 0,
+    DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, DPU_MRAM_HEAP_POINTER_NAME, 
+                             DPU_SEND_BUFFER_OFFSET,
                              sizeof(uint64_t) * maxcount, DPU_XFER_ASYNC));
 
     DPU_ASSERT(dpu_sync(dpu_set));

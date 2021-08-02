@@ -81,19 +81,15 @@ int main() {
         dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
     }
 
-    init_skiplist(30);
+    init_skiplist(20);
     init_test_framework();
 
-    insert_test(100);
-    insert_test(100);
-    insert_test(100);
-    insert_test(100);
-    insert_test(100);
-    for (int i = 0; i < 100; i ++) {
-        insert_test(50);
+    insert_test(10000);
+    for (int i = 0; i < 1000; i ++) {
+        insert_test(500);
         assert(predecessor_test(100));
 
-        remove_test(50);
+        remove_test(500);
     }
     
     assert(predecessor_test(10));

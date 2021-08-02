@@ -12,7 +12,7 @@ int maxheight; // setting max height
 
 void init_skiplist(uint32_t height) {
     init_send_buffer();
-    maxheight = height;
+    maxheight = height - LOWER_PART_HEIGHT;
     L3_insert_task tit = (L3_insert_task){.key = LLONG_MIN,
                                           .addr = null_pptr,
                                           .height = height - LOWER_PART_HEIGHT};
@@ -116,7 +116,6 @@ void remove(int length) {
         }
     }
     exec();
-        print_log();
     if (print_debug) {
         print_log();
     }

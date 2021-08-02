@@ -44,16 +44,21 @@
 __host uint64_t DPU_ID;
 
 // Task Buffers
-__host uint8_t DPU_RECEIVE_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
-__host uint64_t DPU_RECEIVE_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
+// __host uint8_t DPU_RECEIVE_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
+// __host uint64_t DPU_RECEIVE_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
+// __host uint64_t DPU_RECEIVE_BUFFER_SIZE;
+// __host uint64_t DPU_RECEIVE_BUFFER_TASK_COUNT;
+
+// __host uint8_t DPU_SEND_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
+// __host uint64_t DPU_SEND_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
+// __host uint64_t DPU_SEND_BUFFER_SIZE;
+// __host uint64_t DPU_SEND_BUFFER_TASK_COUNT;
+
 __host uint64_t DPU_RECEIVE_BUFFER_SIZE;
 __host uint64_t DPU_RECEIVE_BUFFER_TASK_COUNT;
 
-__host uint8_t DPU_SEND_BUFFER[MAX_TASK_BUFFER_SIZE_PER_DPU];
-__host uint64_t DPU_SEND_BUFFER_OFFSET[MAX_TASK_COUNT_PER_DPU];
 __host uint64_t DPU_SEND_BUFFER_SIZE;
 __host uint64_t DPU_SEND_BUFFER_TASK_COUNT;
-
 
 // Node Buffers & Hash Tables
 __mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
@@ -65,6 +70,8 @@ __host int l3htcnt;
 __host mL3ptr root;
 
 
+
+#define MRAM_TASK_BUFFER
 
 #ifdef MRAM_TASK_BUFFER
 #define init_task(to, from, len) mram_read(from, to, len)
@@ -122,9 +129,10 @@ int main()
     uint32_t lft = DPU_RECEIVE_BUFFER_TASK_COUNT * tasklet_id / NR_TASKLETS;
     uint32_t rt = DPU_RECEIVE_BUFFER_TASK_COUNT * (tasklet_id + 1) / NR_TASKLETS;
 
+    __mram_ptr uint64_t *receive_buffer_offset = DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER_OFFSET;
     for (uint32_t i = lft; i < rt; i++) {
-        // printf("%u %u %u\n", i, lft, rt);
-        mptask t = (mptask)(DPU_RECEIVE_BUFFER + DPU_RECEIVE_BUFFER_OFFSET[i]);
+        // printf("%u\n", i, receive_buffer_offset[i]);
+        mptask t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER + (uint32_t)receive_buffer_offset[i]);
         execute(t);
     }
     printf("l3cnt=%d l3htcnt=%d\n", l3cnt, l3htcnt);
