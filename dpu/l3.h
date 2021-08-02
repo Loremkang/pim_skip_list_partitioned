@@ -8,7 +8,8 @@ extern uint64_t DPU_ID;
 extern __mram_ptr ht_slot l3ht[]; 
 
 static inline void L3_init(L3_insert_task *tit) {
-    assert(l3cnt == 8);
+    // assert(l3cnt == 8);
+    IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     storage_init();
     uint32_t actual_size;
     root = get_new_L3(LLONG_MIN, tit->height, tit->addr, &actual_size);
@@ -23,7 +24,9 @@ static inline void L3_insert(L3_insert_task *tit) {
     mL3ptr newnode = get_new_L3(tit->key, tit->height,
                                tit->addr, &actual_size);
 
-    assert(newnode->height <= root->height);
+    // assert(newnode->height <= root->height);
+    printf("%lld %lld\n", newnode->height, root->height);
+    IN_DPU_ASSERT(newnode->height <= root->height, "L3insert: Wrong newnode height\n");
 
     // find search path
     mL3ptr tmp = root;
@@ -31,19 +34,21 @@ static inline void L3_insert(L3_insert_task *tit) {
     while (ht >= 0) {
         pptr l = tmp->left[ht], r = tmp->right[ht];
         mL3ptr rn = (mL3ptr)r.addr;
-        assert(l.id == DPU_ID || l.id == (uint32_t)-1);
-        assert(r.id == DPU_ID || r.id == (uint32_t)-1);
+        IN_DPU_ASSERT(l.id == DPU_ID || l.id == (uint32_t)-1, "L3insert: wrong l.id\n");
+        IN_DPU_ASSERT(r.id == DPU_ID || r.id == (uint32_t)-1, "L3insert: wrong r.id\n");
         if (r.id != (uint32_t)-1 &&
             rn->key <= tit->key) {  // should not be equal
             tmp = rn;                // go right
-            assert(rn->key != tit->key);
+            // assert(rn->key != tit->key);
+            IN_DPU_ASSERT(rn->key != tit->key, "L3insert: replicated insert\n");
             continue;
         }
         if (ht < (newnode->height)) {  // insert to right
             newnode->right[ht] = r;
             newnode->left[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)tmp};
             if (r.id != (uint32_t)-1) {
-                assert(rn->left[ht].id == DPU_ID);
+                // assert(rn->left[ht].id == DPU_ID);
+                IN_DPU_ASSERT(rn->left[ht].id == DPU_ID, "L3insert: wrong right->left.id");
                 // rn->left[ht].addr = (uint32_t)newnode;
                 rn->left[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)newnode};
             }
@@ -73,20 +78,22 @@ static inline int L3_ht_get(ht_slot v, int64_t key) {
 static inline void L3_remove(L3_remove_task *trt) {
     uint32_t htv = ht_search(trt->key, L3_ht_get);
     if (htv == (uint32_t)-1) {
-        assert(false);
-        return; // not found;
+        // assert(false); // not found;
+        IN_DPU_ASSERT(false, "L3remove: key not found\n");
     }
     mL3ptr tmp = (mL3ptr)htv;
 
-    if (tmp == (uint32_t)-1)
     // mL3ptr tmp = ht_get_L3(trt->key);
-    assert(tmp->key == trt->key);
+    // assert(tmp->key == trt->key);
+    IN_DPU_ASSERT(tmp->key == trt->key, "L3remove: wrong key found\n");
     for (int ht = 0; ht < tmp->height; ht++) {
         pptr l = tmp->left[ht], r = tmp->right[ht];
         mL3ptr ln = (mL3ptr)l.addr, rn = (mL3ptr)r.addr;
-        assert(l.id != (uint32_t)-1);
+        // assert(l.id != (uint32_t)-1);
+        IN_DPU_ASSERT(l.id != (uint32_t)-1, "L3remove: left doesn't exist\n");
         if (r.id != (uint32_t)-1) {
-            assert(rn->left[ht].id == DPU_ID);
+            // assert(rn->left[ht].id == DPU_ID);
+            IN_DPU_ASSERT(rn->left[ht].id == DPU_ID, "L3remove: left.id illegal\n");
             rn->left[ht] = l;
         }
         ln->right[ht] = r;

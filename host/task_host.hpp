@@ -28,6 +28,11 @@ static uint64_t receive_buffer_task_count[MAX_DPU];
 
 // static uint8_t task_buffer[MAX_DPU][MAX_TASK_SIZE];
 
+inline void print_log() {
+    struct dpu_set_t dpu;
+    DPU_FOREACH(dpu_set, dpu) { DPU_ASSERT(dpu_log_read(dpu, stdout)); break;}
+}
+
 inline void init_send_buffer() {
     memset(send_buffer_size, 0, sizeof(send_buffer_size));
     memset(send_buffer_task_count, 0, sizeof(send_buffer_task_count));
@@ -143,6 +148,10 @@ inline bool receive_task() {
         maxsize = max(maxsize, receive_buffer_size[i]);
         maxcount = max(maxcount, receive_buffer_task_count[i]);
     }
+    if (maxsize == LLONG_MAX) {
+        print_log();
+        exit(-1);
+    }
 
     if (maxsize == 0 || maxcount == 0) {
         ASSERT(maxsize == 0 && maxcount == 0);
@@ -177,9 +186,4 @@ inline bool exec() {
     } else {
         return false;
     }
-}
-
-inline void print_log() {
-    struct dpu_set_t dpu;
-    DPU_FOREACH(dpu_set, dpu) { DPU_ASSERT(dpu_log_read(dpu, stdout)); break;}
 }

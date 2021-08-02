@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "node_dpu.h"
+#include "stdlib.h"
 
 
 typedef struct ht_slot {
@@ -50,9 +51,7 @@ static inline void ht_insert(__mram_ptr ht_slot* ht, int32_t pos, uint32_t val) 
     while (hs.v != 0) { // find slot
         pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
         hs = ht[pos];
-        if (pos == ipos) { // full
-            assert(false);
-        }
+        IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
     ht[pos] = (ht_slot){.pos = ipos, .v = val};
     l3htcnt ++;
@@ -73,11 +72,7 @@ static inline void ht_delete(__mram_ptr ht_slot* ht, int32_t pos, uint32_t val) 
         pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
         hs = ht[pos];
         // printf("%d %d %d %d\n", pos, hs.pos, hs.v, val);
-        if (pos == ipos) {  // full
-        // printf("FULL!!");
-        // return;
-            assert(false);
-        }
+        IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
     printf("ipos=%d pos=%d\n", ipos, pos);
     ipos = pos;  // position to delete
@@ -104,11 +99,7 @@ static inline void ht_delete(__mram_ptr ht_slot* ht, int32_t pos, uint32_t val) 
             // printf("skip %d %d %d\n", pos, hs.pos, hs.v);
         }
         pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
-        if (pos == ipos) {  // full
-        // printf("FULL!!");
-        // return;
-            assert(false);
-        }
+        IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
     l3htcnt --;
 }
@@ -127,9 +118,7 @@ static inline uint32_t ht_search(int64_t key, int (*filter)(ht_slot, int64_t)) {
         } else if (v == 1) {  // correct value;
             return (uint32_t)hs.v;
         }
-        if (pos == ipos) {
-            assert(false);
-        }
+        IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
 }
 

@@ -7,9 +7,12 @@
 
 #ifdef KHB_DEBUG
 #define ASSERT(x) assert(x)
+#define IN_DPU_ASSERT(x, y) {if(!(x)){printf("%s", (y));DPU_SEND_BUFFER_SIZE=LLONG_MAX;exit(0);}}
 #else
 #define ASSERT(x)  
+#define DPU_ASSERT(x, y)
 #endif
+
 
 #define XSTR(x) STR(x)
 #define STR(x) #x
@@ -40,7 +43,7 @@
 #define DPU_TASKQUEUE dpu_task_queue
 
 /* Size of the buffer on which the checksum will be performed */
-#define BUFFER_SIZE (200)
+// #define BUFFER_SIZE (200)
 #define LOWER_PART_HEIGHT (6)
 #define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU / 8)
 

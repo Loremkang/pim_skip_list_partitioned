@@ -99,7 +99,8 @@ void execute(mptask t) {
     } else if (t->type == L3_SANCHECK) {
         L3_sancheck();
     } else {
-        assert(false);
+        IN_DPU_ASSERT(false, "Wrong Task Type\n");
+        // assert(false);
     }
 }
 

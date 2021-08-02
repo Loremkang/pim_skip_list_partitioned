@@ -65,7 +65,19 @@ void predecessor(int length) {
     // }
 }
 
+void deduplication(int64_t *arr, int &length) {  // assume sorted
+    sort(arr, arr + length);
+    int l = 1;
+    for (int i = 1; i < length; i++) {
+        if (arr[i] != arr[i - 1]) {
+            arr[l++] = arr[i];
+        }
+    }
+    length = l;
+}
+
 void insert(int length) {
+    deduplication(op_keys, length);
     printf("\n*** Insert: L3 insert\n");
     init_send_buffer();
     for (int i = 0; i < length; i++) {
@@ -83,17 +95,6 @@ void insert(int length) {
         }
     }
     exec();
-}
-
-void deduplication(int64_t *arr, int &length) {  // assume sorted
-    sort(arr, arr + length);
-    int l = 1;
-    for (int i = 1; i < length; i++) {
-        if (arr[i] != arr[i - 1]) {
-            arr[l++] = arr[i];
-        }
-    }
-    length = l;
 }
 
 void remove(int length) {
@@ -115,6 +116,7 @@ void remove(int length) {
         }
     }
     exec();
+        print_log();
     if (print_debug) {
         print_log();
     }
