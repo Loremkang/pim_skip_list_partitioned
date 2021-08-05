@@ -10,14 +10,14 @@ typedef struct garbage {
     int64_t height; // same place as height in nodes
 } garbage;
 
-__host __mram_ptr uint64_t L3_garbage[MAX_TOTAL_HEIGHT];
+__host __mram_ptr uint64_t L3_garbage[MAX_L3_HEIGHT];
 
 void L3_gc_init() {
     memset(L3_garbage, -1, sizeof(L3_garbage));
 }
 
 void L3_gc(mL3ptr space, int height) {
-    IN_DPU_ASSERT(height < MAX_TOTAL_HEIGHT, "L3_garbage_collect: recycling a node too high");
+    IN_DPU_ASSERT(height < MAX_L3_HEIGHT, "L3_garbage_collect: recycling a node too high");
     __mram_ptr garbage* g = (__mram_ptr garbage*)space;
     g->nxt = L3_garbage[height];
     g->height = -1;

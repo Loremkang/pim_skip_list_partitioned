@@ -12,10 +12,12 @@ int maxheight; // setting max height
 
 void init_skiplist(uint32_t height) {
     init_send_buffer();
-    maxheight = height - LOWER_PART_HEIGHT;
+    // maxheight = height - LOWER_PART_HEIGHT;
+    maxheight = height;
     L3_insert_task tit = (L3_insert_task){.key = LLONG_MIN,
                                           .addr = null_pptr,
-                                          .height = height - LOWER_PART_HEIGHT};
+                                        //   .height = height - LOWER_PART_HEIGHT};
+                                          .height = height};
     push_task(-1, L3_INIT, &tit, sizeof(L3_insert_task));
 
     printf("INIT UPPER PART -INF\n");

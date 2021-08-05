@@ -81,7 +81,7 @@ int main() {
         dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
     }
 
-    init_skiplist(20);
+    init_skiplist(MAX_L3_HEIGHT);
     init_test_framework();
 
     insert_test(10000);

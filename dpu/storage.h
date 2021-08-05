@@ -133,7 +133,7 @@ static inline mL3ptr apply_L3(L3node* wptr, int height, uint32_t size) {
 
 static inline mL3ptr get_new_L3(int64_t key, int height, pptr down,
                                 uint32_t* actual_size) {
-    uint8_t buffer[40 + sizeof(pptr) * 2 * MAX_TOTAL_HEIGHT];
+    uint8_t buffer[40 + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, height, down, buffer);
     *actual_size = sizeof(L3node) + sizeof(pptr) * height * 2;
     mL3ptr ret = apply_L3(nn, height, *actual_size);

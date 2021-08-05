@@ -21,7 +21,8 @@
 #define MAX_TASK_BUFFER_SIZE_PER_DPU (1 << 20) // 1MB
 #define MAX_TASK_COUNT_PER_DPU ((1 << 20) >> 3) // 1MB
 #define MAX_TASK_SIZE (1 << 10)
-#define MAX_TOTAL_HEIGHT (30)
+// #define MAX_TOTAL_HEIGHT (30)
+#define MAX_L3_HEIGHT (20)
 
 /* DPU variable that will be read of write by the host */
 #define DPU_ID id

@@ -81,8 +81,7 @@ typedef __mram_ptr task* mptask;
 typedef task* mptask;
 #endif
 
-
-void execute(mptask t) {
+void execute(mptask t, int l, int r) {
     // printf("EXEC ");
     if (t->type == L3_INIT) {
         // printf("L3_INIT\n");
@@ -92,17 +91,52 @@ void execute(mptask t) {
         L3_init(&tit);
     } else if (t->type == L3_INSERT) {
         // printf("L3_INSERT\n");
+        int length = r - l;
+        int64_t* keys = mem_alloc(sizeof(int64_t) * length);
+        int64_t* heights = mem_alloc(sizeof(int64_t) * length);
+        pptr* addrs = mem_alloc(sizeof(pptr) * length);
+
         L3_insert_task tit;
-        init_task(&tit, t->buffer, sizeof(L3_insert_task));
-        L3_insert(&tit);
+        for (int i = 0; i < length; i++) {
+            t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
+                         (uint32_t)receive_buffer_offset[i + length]);
+            init_task(&tit, t->buffer, sizeof(L3_insert_task));
+            keys[i] = tit->key;
+            heights[i] = tit->height;
+            addrs[i] = tit->addr;
+        }
+
+        int8_t *max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
+        mL3ptr(*right_predecessor_shared)[MAX_L3_HEIGHT] =
+            mem_alloc(sizeof(mL3ptr[NR_TASKLETS][MAX_L3_HEIGHT]));
+        mL3ptr(*right_newnode_shared)[MAX_L3_HEIGHT] =
+            mem_alloc(sizeof(mL3ptr[NR_TASKLETS][MAX_L3_HEIGHT]));
+        L3_insert_parallel(length, keys, heights, addrs, max_height_shared,
+                           right_predecessor_shared, right_newnode_shared);
+
     } else if (t->type == L3_REMOVE) {
+        int length = r - l;
+        int64_t* keys = mem_alloc(sizeof(int64_t) * length);
         L3_remove_task trt;
-        init_task(&trt, t->buffer, sizeof(L3_remove_task));
-        L3_remove(&trt);
+        for (int i = 0; i < length; i++) {
+            t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
+                         (uint32_t)receive_buffer_offset[i + length]);
+            init_task(&trt, t->buffer, sizeof(L3_remove_task));
+            keys[i] = tit->key;
+        }
+
+        mL3ptr(*left_node_shared)[MAX_L3_HEIGHT] =
+            mem_alloc(sizeof(mL3ptr[NR_TASKLETS][MAX_L3_HEIGHT]));
+        int8_t *max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
+        L3_remove_parallel(length, keys, max_height_shared, left_node_shared);
     } else if (t->type == L3_SEARCH) {
         L3_search_task tst;
-        init_task(&tst, t->buffer, sizeof(L3_search_task));
-        L3_search(&tst);
+        for (int i = l; i < r; i++) {
+            t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
+                         (uint32_t)receive_buffer_offset[i]);
+            init_task(&tst, t->buffer, sizeof(L3_search_task));
+            L3_search(&tst);
+        }
     } else if (t->type == L3_SANCHECK) {
         L3_sancheck();
     } else {
@@ -113,31 +147,35 @@ void execute(mptask t) {
 
 void garbage_func();
 
-int main()
-{
+int main() {
     uint32_t tasklet_id = me();
     if (tasklet_id == 0) {
         printf("%lu\n", DPU_ID);
         // uint32_t mram_base_addr_A = (uint32_t)DPU_MRAM_HEAP_POINTER;
         // printf("!!! %x\n", mram_base_addr_A);
-        // printf("** %d %d %d\n", sizeof(uint64_t), sizeof(unsigned long long), sizeof(unsigned long));
+        // printf("** %d %d %d\n", sizeof(uint64_t), sizeof(unsigned long long),
+        // sizeof(unsigned long));
         DPU_SEND_BUFFER_SIZE = DPU_SEND_BUFFER_TASK_COUNT = 0;
+        mem_reset();
     } else {
         return 0;
     }
-    
+
     uint32_t lft = DPU_RECEIVE_BUFFER_TASK_COUNT * tasklet_id / NR_TASKLETS;
-    uint32_t rt = DPU_RECEIVE_BUFFER_TASK_COUNT * (tasklet_id + 1) / NR_TASKLETS;
+    uint32_t rt =
+        DPU_RECEIVE_BUFFER_TASK_COUNT * (tasklet_id + 1) / NR_TASKLETS;
 
-    __mram_ptr uint64_t *receive_buffer_offset = DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER_OFFSET;
-    for (uint32_t i = lft; i < rt; i++) {
-        // printf("%u\n", i, receive_buffer_offset[i]);
-        mptask t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER + (uint32_t)receive_buffer_offset[i]);
-        execute(t);
-    }
+    __mram_ptr uint64_t* receive_buffer_offset =
+        DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER_OFFSET;
+    // mptask t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
+    // (uint32_t)receive_buffer_offset[i]);
+    mptask t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER);
+    execute(t, lft, rt);
+    // for (uint32_t i = lft; i < rt; i++) {
+    //     printf("%u\n", i, receive_buffer_offset[i]);
+    //     execute(t);
+    // }
     printf("l3cnt=%d l3htcnt=%d\n", l3cnt, l3htcnt);
-
-    
 
     // for (int i = 0; i < DPU_RECEIVE_BUFFER_TASK_COUNT; i ++)
     // int lft = DPU_RECEIVE_BUFFER_CNT * tasklet_id / NR_TASKLETS;
