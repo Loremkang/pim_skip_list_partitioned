@@ -7,7 +7,7 @@
 typedef struct pptr {
     uint32_t id;
     uint32_t addr;
-} pptr;
+} pptr __attribute__((aligned (8)));
 
 #define null_pptr ((pptr){.id = (uint32_t)-1, .addr = (uint32_t)-1})
 

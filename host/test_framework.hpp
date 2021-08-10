@@ -25,6 +25,7 @@ extern bool print_debug;
 static set<int64_t> golden_L3;
 
 void init_test_framework() {
+    epoch_number = 0;
     golden_L3.clear();
     golden_L3.insert(LLONG_MIN);
     golden_L3.insert(LLONG_MAX);

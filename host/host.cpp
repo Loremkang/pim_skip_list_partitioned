@@ -55,13 +55,14 @@ dpu_set_t dpu_set;
 struct dpu_set_t dpu;
 uint32_t each_dpu;
 int nr_of_dpus;
+int64_t epoch_number;
 
 int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
 
 void init_rand() {
-    // srand(time(NULL));
-    srand(147);
+    srand(time(NULL));
+    // srand(147);
 }
 
 /**
@@ -83,6 +84,20 @@ int main() {
 
     init_skiplist(MAX_L3_HEIGHT);
     init_test_framework();
+    // insert_test(100);
+    for (int i = 0; i < 10; i ++) {
+        insert_test(1000);
+    }
+    assert(predecessor_test(100));
+    
+    L3_sancheck();
+    return 0;
+    for (int i = 0; i < 10; i ++) {
+        insert_test(1000);
+        assert(predecessor_test(1000));
+    }
+    
+    return 0;
 
     insert_test(10000);
     for (int i = 0; i < 1000; i ++) {

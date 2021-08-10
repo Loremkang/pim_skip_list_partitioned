@@ -8,6 +8,7 @@
 #ifdef KHB_DEBUG
 #define ASSERT(x) assert(x)
 #define IN_DPU_ASSERT(x, y) {if(!(x)){printf("%s", (y));DPU_SEND_BUFFER_SIZE=LLONG_MAX;exit(0);}}
+#define EXIT() {IN_DPU_ASSERT(false, "\n");}
 #else
 #define ASSERT(x)  
 #define DPU_ASSERT(x, y)
@@ -26,6 +27,10 @@
 
 /* DPU variable that will be read of write by the host */
 #define DPU_ID id
+#define DPU_EPOCH_NUMBER epoch_number
+#define INVALID_DPU_ID ((uint32_t)-1)
+#define OLD_NODES_DPU_ID ((uint32_t)-2)
+#define INVALID_DPU_ADDR ((uint32_t)-1)
 
 // #define DPU_SEND_BUFFER dpu_send_buffer
 // #define DPU_SEND_BUFFER_OFFSET dpu_send_buffer_offset

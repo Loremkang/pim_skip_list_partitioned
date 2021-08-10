@@ -7,10 +7,12 @@
 using namespace std;
 
 extern bool print_debug;
+extern int64_t epoch_number;
 
 int maxheight; // setting max height
 
 void init_skiplist(uint32_t height) {
+    epoch_number ++;
     init_send_buffer();
     // maxheight = height - LOWER_PART_HEIGHT;
     maxheight = height;
@@ -26,6 +28,7 @@ void init_skiplist(uint32_t height) {
 }
 
 void predecessor(int length) {
+    epoch_number ++;
     printf("START PREDECESSOR\n");
     // sort(op_keys, op_keys + length);
 
@@ -43,9 +46,15 @@ void predecessor(int length) {
             L3_search_task tst = (L3_search_task){.key = op_keys[j]};
             push_task(i, L3_SEARCH, &tst, sizeof(L3_search_task));
             key2offset.insert(op_keys[j], j);
+            // cout<<op_keys[j]<<endl;
         }
     });
+    // apply_to_all_request(false, [&](task *t) {
+    //     L3_search_task *tst = (L3_search_task *)t->buffer;
+    //     cout<<tst->key<<endl;
+    // });
     exec();
+    // print_log();
 
     apply_to_all_reply(false, [&](task *t) {
         // assert(t->type == L3_SEARCH);
@@ -79,6 +88,7 @@ void deduplication(int64_t *arr, int &length) {  // assume sorted
 }
 
 void insert(int length) {
+    epoch_number ++;
     deduplication(op_keys, length);
     printf("\n*** Insert: L3 insert\n");
     init_send_buffer();
@@ -92,14 +102,16 @@ void insert(int length) {
             (L3_insert_task){.key = op_keys[i], .addr = null_pptr, .height = h};
         push_task(-1, L3_INSERT, &tit, sizeof(L3_insert_task));
         if (print_debug) {
-            printf("upper insert %ld %d-%x\n", op_keys[i], tit.addr.id,
+            printf("upper insert %ld %d %d-%x\n", op_keys[i], h, tit.addr.id,
                    tit.addr.addr);
         }
     }
     exec();
+    print_log();
 }
 
 void remove(int length) {
+    epoch_number ++;
     deduplication(op_keys, length);
     // for (int i = 0; i < length; i ++) {
     //     cout<<op_keys[i]<<endl;
