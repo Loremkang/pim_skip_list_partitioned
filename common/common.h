@@ -59,10 +59,10 @@
 #define LOWER_PART_HEIGHT (6)
 #define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU / 8)
 
-// L0,1,2,3 1MB
-#define LX_BUFFER_SIZE (1 << 20)
+// L0,1,2,3 8MB
+#define LX_BUFFER_SIZE (12 << 20)
 
-// HASH TABLE 1MB. should be power of 2
-#define LX_HASHTABLE_SIZE ((1 << 20) >> 3)
+// HASH TABLE 2MB. should be power of 2
+#define LX_HASHTABLE_SIZE ((2 << 20) >> 3)
 
 /* Structure used by both the host and the dpu to communicate information */

@@ -30,6 +30,41 @@ void init_test_framework() {
     golden_L3.insert(LLONG_MIN);
     golden_L3.insert(LLONG_MAX);
 }
+
+bool get_test(int length) {
+    for (int i = 0; i < length; i++) {
+        if (rand() & 1) {
+            auto it = golden_L3.begin();
+            int rnd = (randint64() % (golden_L3.size() - 2)) +
+                      1;  // don't ask -INF or INF
+            advance(it, rnd);
+            op_keys[i] = *it;
+        } else {
+            op_keys[i] = randint64();
+        }
+    }
+
+    // sort(op_keys, op_keys + length);
+    cout << "\n*** Start Get Test ***" << endl;
+    get(length);
+
+    if (print_debug) {
+        for_each(golden_L3.begin(), golden_L3.end(),
+                 [&](int64_t v) { cout << "*" << v << endl; });
+        cout << endl;
+    }
+
+    for (int i = 0; i < length; i++) {
+        int64_t golden_result = (golden_L3.find(op_keys[i]) != golden_L3.end()) ? 1 : 0;
+        if (op_results[i] != golden_result) {
+            cout << op_keys[i] << ' ' << op_results[i] << ' ' << golden_result << endl;
+            return false;
+        }
+    }
+    cout << endl << "\n*** End Get Test ***" << endl;
+    return true;
+}
+
 bool predecessor_test(int length) {
     for (int i = 0; i < length; i++) {
         op_keys[i] = randint64();
@@ -71,17 +106,21 @@ void remove_test(int length) {
     assert(golden_L3.size() > 2);
     cout << "\n*** Start Remove Test ***" << endl;
     for (int i = 0; i < length; i++) {
-        auto it = golden_L3.begin();
-        int rnd =
-            (randint64() % (golden_L3.size() - 2)) + 1;  // don't remove -INF or INF
-        advance(it, rnd);
-        op_keys[i] = *it;
+        if (rand() & 1) {
+            auto it = golden_L3.begin();
+            int rnd = (randint64() % (golden_L3.size() - 2)) +
+                      1;  // don't ask -INF or INF
+            advance(it, rnd);
+            op_keys[i] = *it;
+        } else {
+            op_keys[i] = randint64();
+        }
     }
+    remove(length);
     deduplication(op_keys, length);
     for (int i = 0; i < length; i++) {
         golden_L3.erase(op_keys[i]);
     }
-    remove(length);
     cout << endl << "\n*** End Remove Test ***" << endl;
 }
 

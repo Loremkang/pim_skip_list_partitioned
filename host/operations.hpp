@@ -27,6 +27,43 @@ void init_skiplist(uint32_t height) {
     // print_log();
 }
 
+void get(int length) {
+    epoch_number ++;
+    printf("START GET\n");
+
+    libcuckoo::cuckoohash_map<int64_t, int> key2offset;
+    key2offset.reserve(length * 2);
+
+    init_send_buffer();
+    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+        int l = length * i / nr_of_dpus;
+        int r = length * (i + 1) / nr_of_dpus;
+        for (int j = l; j < r; j++) {
+            if (key2offset.contains(op_keys[j])) {
+                continue;
+            }
+            L3_get_task tgt = (L3_get_task){.key = op_keys[j]};
+            push_task(i, L3_GET, &tgt, sizeof(L3_get_task));
+            key2offset.insert(op_keys[j], j);
+        }
+    });
+    exec();
+
+    apply_to_all_reply(false, [&](task *t) {
+        L3_get_reply *tsr = (L3_get_reply *)t->buffer;
+        int j = 0;
+        assert(key2offset.find(tsr->key, j));
+        op_results[j] = tsr->available;
+        // printf("%ld %ld\n", tsr->key, tsr->result_key);
+    });
+
+    parlay::parallel_for(0, length, [&](size_t i) {
+        int j = 0;
+        assert(key2offset.find(op_keys[i], j));
+        op_results[i] = op_results[j];
+    });
+}
+
 void predecessor(int length) {
     epoch_number ++;
     printf("START PREDECESSOR\n");

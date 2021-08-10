@@ -85,10 +85,17 @@ int main() {
     init_skiplist(MAX_L3_HEIGHT);
     init_test_framework();
     // insert_test(100);
-    for (int i = 0; i < 10; i ++) {
+    for (int i = 0; i < 5; i ++) {
         insert_test(1000);
     }
-    assert(predecessor_test(100));
+    for (int i = 0; i < 10; i ++) {
+        insert_test(1000);
+        assert(predecessor_test(1000));
+        remove_test(1000);
+    }
+    // remove_test(1000);
+    // assert(get_test(100));
+    // assert(predecessor_test(100));
     
     L3_sancheck();
     return 0;

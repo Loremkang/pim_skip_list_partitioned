@@ -78,7 +78,7 @@ int8_t *max_height_shared;
 
 __mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
 __host int l3cnt = 8;
-__host int l3htcnt;
+__host int l3htcnt = 0;
 
 __host mL3ptr root;
 
@@ -99,10 +99,12 @@ void execute(mptask t, int l, int r) {
     // printf("EXEC ");
     if (t->type == L3_INIT) {
         // printf("L3_INIT\n");
-        L3_insert_task tit;
-        // mram_read(t->buffer, &tit, sizeof(L3_insert_task));
-        init_task(&tit, t->buffer, sizeof(L3_insert_task));
-        L3_init(&tit);
+        if (tasklet_id == 0) {
+            L3_insert_task tit;
+            // mram_read(t->buffer, &tit, sizeof(L3_insert_task));
+            init_task(&tit, t->buffer, sizeof(L3_insert_task));
+            L3_init(&tit);
+        }
     } else if (t->type == L3_INSERT) {
         // printf("L3_INSERT\n");
         int length = r - l;
@@ -118,15 +120,17 @@ void execute(mptask t, int l, int r) {
             keys[i] = tit.key;
             heights[i] = (int8_t)tit.height;
             addrs[i] = tit.addr;
-            // printf("%u %lld %d\n", receive_buffer_offset[i + length], keys[i], heights[i]);
-            IN_DPU_ASSERT(heights[i] > 0 && heights[i] < MAX_L3_HEIGHT, "execute: invalid height\n");
+            // printf("%u %lld %d\n", receive_buffer_offset[i + length],
+            // keys[i], heights[i]);
+            IN_DPU_ASSERT(heights[i] > 0 && heights[i] < MAX_L3_HEIGHT,
+                          "execute: invalid height\n");
         }
 
         // int8_t *max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
-        mL3ptr *right_predecessor_shared = bufferA_shared;
-            // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
-        mL3ptr *right_newnode_shared = bufferB_shared;
-            // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
+        mL3ptr* right_predecessor_shared = bufferA_shared;
+        // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
+        mL3ptr* right_newnode_shared = bufferB_shared;
+        // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
         // for (int i = 0; i < length; i ++) {
         //     printf("%lld\n", keys[i]);
         // }
@@ -145,8 +149,8 @@ void execute(mptask t, int l, int r) {
             keys[i] = trt.key;
         }
 
-        mL3ptr *left_node_shared = bufferA_shared;
-            // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
+        mL3ptr* left_node_shared = bufferA_shared;
+        // mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
         // int8_t *max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
         L3_remove_parallel(length, keys, max_height_shared, left_node_shared);
     } else if (t->type == L3_SEARCH) {
@@ -155,10 +159,18 @@ void execute(mptask t, int l, int r) {
             t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
                          (uint32_t)receive_buffer_offset[i]);
             init_task(&tst, t->buffer, sizeof(L3_search_task));
-            printf("%d*%lld\n", i, tst.key);
+            // printf("%d*%lld\n", i, tst.key);
             L3_search(tst.key, 0, 0, NULL);
         }
         // EXIT();
+    } else if (t->type == L3_GET) {
+        L3_get_task tgt;
+        for (int i = l; i < r; i++) {
+            t = (mptask)(DPU_MRAM_HEAP_POINTER + DPU_RECEIVE_BUFFER +
+                         (uint32_t)receive_buffer_offset[i]);
+            init_task(&tgt, t->buffer, sizeof(L3_get_task));
+            L3_get(tgt.key);
+        }
     } else if (t->type == L3_SANCHECK) {
         if (tasklet_id == 0) {
             L3_sancheck();
@@ -192,10 +204,12 @@ int main() {
         // }
 
         // host_barrier = num_tasklets;
-        bufferA_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
-        bufferB_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
+        bufferA_shared =
+            mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
+        bufferB_shared =
+            mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
         max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
-        for (int i = 0; i < NR_TASKLETS; i ++) {
+        for (int i = 0; i < NR_TASKLETS; i++) {
             max_height_shared[i] = 0;
         }
         printf("%lu * %x * %x * %x\n", DPU_RECEIVE_BUFFER_TASK_COUNT,

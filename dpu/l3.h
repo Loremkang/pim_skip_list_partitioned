@@ -28,6 +28,27 @@ static inline void L3_init(L3_insert_task *tit) {
     push_task(L3_INIT, &tir, sizeof(L3_insert_reply));
 }
 
+static inline int L3_ht_get(ht_slot v, int64_t key) {
+    if (v.v == 0) {
+        return -1;
+    }
+    mL3ptr np = (mL3ptr)v.v;
+    if (np->key == key) {
+        return 1;
+    }
+    return 0;
+}
+
+static inline void L3_get(int64_t key) {
+    uint32_t htv = ht_search(key, L3_ht_get);
+    // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
+    L3_get_reply tgr =
+        (L3_get_reply){.key = key,
+                       .addr = (pptr){.id = DPU_ID, .addr = htv},
+                       .available = (htv != INVALID_DPU_ADDR) ? 1 : 0};
+    push_task(L3_GET, &tgr, sizeof(L3_get_reply));
+}
+
 static inline int64_t L3_search(int64_t key, int record_height_l,
                                 int record_height_r, mL3ptr *rightmost) {
     mL3ptr tmp = root;
@@ -45,7 +66,7 @@ static inline int64_t L3_search(int64_t key, int record_height_l,
         ht--;
     }
     // IN_DPU_ASSERT(rightmost != NULL, "L3 search: rightmost error");
-    if (rightmost == NULL) { // pure search task
+    if (rightmost == NULL) {  // pure search task
         L3_search_reply tsr = (L3_search_reply){
             .key = key, .addr = tmp->down, .result_key = tmp->key};
         push_task(L3_SEARCH, &tsr, sizeof(L3_search_reply));
@@ -87,9 +108,8 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
         }
     }
     // if (DPU_EPOCH_NUMBER == 3) {
-        // EXIT();
+    // EXIT();
     // }
-
 
     // mutex_lock(L3_lock);
     mL3ptr *predecessor = mem_alloc(sizeof(mL3ptr) * max_height);
@@ -126,17 +146,19 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
                     (pptr){.id = DPU_ID, .addr = (uint32_t)right_newnode[ht]};
             } else {
                 // IN_DPU_ASSERT(false, "L3 insert parallel : P1 ERROR");
-                right_newnode[ht]->right[ht] = 
-                    (pptr){.id = OLD_NODES_DPU_ID, .addr = right_predecessor[ht]->right[ht].addr};
+                right_newnode[ht]->right[ht] =
+                    (pptr){.id = OLD_NODES_DPU_ID,
+                           .addr = right_predecessor[ht]->right[ht].addr};
                 IN_DPU_ASSERT(
                     right_predecessor[ht]->right[ht].id != INVALID_DPU_ID,
                     "L3 insert parallel: Wrong rp->right");
                 // mL3ptr rn = (mL3ptr)right_predecessor[ht]->right[ht].addr;
                 // rn->left[ht] =
-                //     (pptr){.id = DPU_ID, .addr = (uint32_t)right_newnode[ht]};
+                //     (pptr){.id = DPU_ID, .addr =
+                //     (uint32_t)right_newnode[ht]};
 
-                newnode[i]->left[ht] =
-                    (pptr){.id = OLD_NODES_DPU_ID, .addr = (uint32_t)predecessor[ht]};
+                newnode[i]->left[ht] = (pptr){
+                    .id = OLD_NODES_DPU_ID, .addr = (uint32_t)predecessor[ht]};
                 // predecessor[ht]->right[ht] =
                 //     (pptr){.id = DPU_ID, .addr = (uint32_t)newnode[i]};
             }
@@ -169,10 +191,9 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
     for (int ht = max_height_r; ht < max_height; ht++) {
         // right_newnode[ht]->right[ht] = right_predecessor[ht]->right[ht];
         if (right_predecessor[ht]->right[ht].id != INVALID_DPU_ID) {
-            right_newnode[ht]->right[ht] = (pptr) {
-                .id = OLD_NODES_DPU_ID,
-                .addr = right_predecessor[ht]->right[ht].addr
-            };
+            right_newnode[ht]->right[ht] =
+                (pptr){.id = OLD_NODES_DPU_ID,
+                       .addr = right_predecessor[ht]->right[ht].addr};
         } else {
             right_newnode[ht]->right[ht] = null_pptr;
         }
@@ -250,16 +271,17 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
                 //     (uint32_t)right_newnode_l[ht]};
 
                 // build left_successor <-> newnode
-                left_newnode[ht]->left[ht] = (pptr){
-                    .id = OLD_NODES_DPU_ID, .addr = (uint32_t)left_predecessor[ht]};
+                left_newnode[ht]->left[ht] =
+                    (pptr){.id = OLD_NODES_DPU_ID,
+                           .addr = (uint32_t)left_predecessor[ht]};
                 // left_predecessor[ht]->right[ht] =
                 //     (pptr){.id = DPU_ID, .addr = (uint32_t)left_newnode[ht]};
             }
         }
         if (l < 0) {
             // build left_successor <-> newnode
-            left_newnode[ht]->left[ht] =
-                (pptr){.id = OLD_NODES_DPU_ID, .addr = (uint32_t)left_predecessor[ht]};
+            left_newnode[ht]->left[ht] = (pptr){
+                .id = OLD_NODES_DPU_ID, .addr = (uint32_t)left_predecessor[ht]};
             // left_predecessor[ht]->right[ht] =
             //     (pptr){.id = DPU_ID, .addr = (uint32_t)left_newnode[ht]};
         }
@@ -351,17 +373,6 @@ static inline void L3_insert(L3_insert_task *tit, mL3ptr *rightmost) {
     push_task(L3_INSERT, &tir, sizeof(L3_insert_reply));
 }
 
-static inline int L3_ht_get(ht_slot v, int64_t key) {
-    if (v.v == 0) {
-        return -1;
-    }
-    mL3ptr np = (mL3ptr)v.v;
-    if (np->key == key) {
-        return 1;
-    }
-    return 0;
-}
-
 static inline void L3_remove_parallel(int length, int64_t *keys,
                                       int8_t *max_height_shared,
                                       mL3ptr *left_node_shared) {
@@ -371,46 +382,40 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
     int8_t max_height = 0;
     for (int i = 0; i < length; i++) {
         uint32_t htv = ht_search(keys[i], L3_ht_get);
-        IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
+        // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
         nodes[i] = (mL3ptr)htv;
-        heights[i] = nodes[i]->height;
-        max_height = (heights[i] > max_height) ? heights[i] : max_height;
+        if (htv == INVALID_DPU_ADDR) {  // not found
+            heights[i] = 0;
+        } else {
+            heights[i] = nodes[i]->height;
+        }
+        // max_height = (heights[i] > max_height) ? heights[i] : max_height;
     }
     mL3ptr *left_node = left_node_shared + tasklet_id * MAX_L3_HEIGHT;
-    {
-        max_height = 0;
-        for (int i = 0; i < length; i++) {
-            if (heights[i] > max_height) {
-                for (int ht = max_height; ht < heights[i]; ht++) {
-                    left_node[ht] = nodes[i];
-                }
-                max_height = heights[i];
-            }
-        }
-    }
 
+    max_height = 0;
     for (int i = 0; i < length; i++) {
-        for (int ht = 0; ht < heights[i]; ht++) {
-            if (nodes[i] == left_node[ht]) {
-                continue;
-            }
+        int min_height = (heights[i] < max_height) ? heights[i] : max_height;
+        for (int ht = 0; ht < min_height; ht++) {
             mL3ptr ln = (mL3ptr)(nodes[i]->left[ht].addr);
             ln->right[ht] = nodes[i]->right[ht];
             if (nodes[i]->right[ht].id != INVALID_DPU_ID) {
                 mL3ptr rn = (mL3ptr)(nodes[i]->right[ht].addr);
                 rn->left[ht] = nodes[i]->left[ht];
             }
+            nodes[i]->left[ht] = nodes[i]->right[ht] = null_pptr;
+        }
+        if (heights[i] > max_height) {
+            for (int ht = max_height; ht < heights[i]; ht++) {
+                left_node[ht] = nodes[i];
+            }
+            max_height = heights[i];
         }
     }
+
     max_height_shared[tasklet_id] = max_height;
 
     barrier_wait(&L3_barrier);
-    // mutex_lock(L3_lock);
-    // host_barrier--;
-    // mutex_unlock(L3_lock);
-
-    // while (host_barrier != 0) {
-    // };
 
     for (int l = (int)tasklet_id - 1, ht = 0; ht < max_height; ht++) {
         while (l >= 0 && ht >= max_height_shared[l]) {
@@ -422,7 +427,7 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
             int r = tasklet_id + 1;
             mL3ptr rn = left_node[ht];
             for (; r < NR_TASKLETS; r++) {
-                if (heights[r] <= ht) {
+                if (max_height_shared[r] <= ht) {
                     continue;
                 }
                 mL3ptr *left_node_r = left_node_shared + r * MAX_L3_HEIGHT;
@@ -433,7 +438,7 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
                 rn = left_node_r[ht];
             }
             IN_DPU_ASSERT(left_node[ht]->left[ht].id == DPU_ID,
-                          "L3removeparallel: wrong leftid\n");
+                          "L3 remove parallel: wrong leftid\n");
             mL3ptr ln = (mL3ptr)(left_node[ht]->left[ht].addr);
             ln->right[ht] = rn->right[ht];
             if (rn->right[ht].id != INVALID_DPU_ID) {
@@ -441,6 +446,9 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
                 rn->left[ht] = left_node[ht]->left[ht];
             }
         } else {  // not the left most node
+            IN_DPU_ASSERT(
+                ((mL3ptr)left_node_l[ht]->right[ht].addr == left_node[ht]),
+                "L3 remove parallel: wrong skip");
             // do nothing
         }
     }

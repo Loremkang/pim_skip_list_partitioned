@@ -9,6 +9,7 @@
 #define L3_REMOVE 3
 #define L3_SEARCH 4
 #define L3_SANCHECK 5
+#define L3_GET 6
 
 // #define LOWER_INIT 1
 // #define BUILD_UP_DOWN 3
@@ -47,6 +48,16 @@ typedef struct {
     pptr addr;
     int64_t result_key;
 } L3_search_reply;
+
+typedef struct {
+    int64_t key;
+} L3_get_task;
+
+typedef struct {
+    int64_t key;
+    pptr addr;
+    int64_t available;
+} L3_get_reply;
 
 typedef struct {
     int64_t nothing;

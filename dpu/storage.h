@@ -99,7 +99,7 @@ static inline uint32_t ht_search(int64_t key, int (*filter)(ht_slot, int64_t)) {
         ht_slot hs = l3ht[pos];  // pull to wram
         int v = filter(hs, key);
         if (v == -1) {  // empty slot
-            return (uint32_t)-1;
+            return INVALID_DPU_ADDR;
             // continue;
         } else if (v == 0) {  // incorrect value
             pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
