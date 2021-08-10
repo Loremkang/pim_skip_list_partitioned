@@ -30,6 +30,7 @@ static uint64_t receive_buffer_task_count[MAX_DPU];
 // static uint8_t task_buffer[MAX_DPU][MAX_TASK_SIZE];
 
 inline void print_log(bool show_all_dpu = false) {
+    return;
     DPU_FOREACH(dpu_set, dpu) {
         DPU_ASSERT(dpu_log_read(dpu, stdout));
         if (!show_all_dpu) {

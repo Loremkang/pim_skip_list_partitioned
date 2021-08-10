@@ -40,6 +40,7 @@ extern "C" {
 #include "host.hpp"
 #include "test_framework.hpp"
 #include "operations.hpp"
+#include "timer.hpp"
 
 
 #ifndef DPU_BINARY
@@ -71,7 +72,10 @@ void init_rand() {
 int main() {
     init_rand();
 
-    DPU_ASSERT(dpu_alloc(NR_DPUS, "backend=simulator", &dpu_set));
+    timer init_timer("init");
+
+    init_timer.start();
+    DPU_ASSERT(dpu_alloc(MAX_DPU, "backend=hw", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
@@ -82,46 +86,25 @@ int main() {
         dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
     }
 
-    init_skiplist(MAX_L3_HEIGHT);
+
+    init_skiplist(14);
     init_test_framework();
-    // insert_test(100);
+    init_timer.end();
+
     for (int i = 0; i < 5; i ++) {
-        insert_test(1000);
+        insert_test(500, true);
     }
-    for (int i = 0; i < 10; i ++) {
-        insert_test(1000);
-        assert(predecessor_test(1000));
-        remove_test(1000);
+    for (int i = 0; i < 20; i ++) {
+        insert_test(500, true);
+        assert(predecessor_test(500 * MAX_DPU, true));
+        remove_test(500, true);
     }
-    // remove_test(1000);
-    // assert(get_test(100));
-    // assert(predecessor_test(100));
-    
-    L3_sancheck();
-    return 0;
-    for (int i = 0; i < 10; i ++) {
-        insert_test(1000);
-        assert(predecessor_test(1000));
-    }
-    
-    return 0;
-
-    insert_test(10000);
-    for (int i = 0; i < 1000; i ++) {
-        insert_test(500);
-        assert(predecessor_test(100));
-
-        remove_test(500);
-    }
-    
-    assert(predecessor_test(10));
-
-    return 0;
-    for (int i = 0; i < 100; i++) {
-        insert_test(50);
-        assert(predecessor_test(50));
-    }
-
+    print_all_timers();
+    // init_timer.print();
+    // insert_timer.print();
+    // predecessor_timer.print();
+    // remove_timer.print();
+    // L3_sancheck();
     DPU_ASSERT(dpu_free(dpu_set));
     return 0;
 }

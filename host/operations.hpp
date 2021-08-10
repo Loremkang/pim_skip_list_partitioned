@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <libcuckoo/cuckoohash_map.hh>
 #include "task_host.hpp"
+#include "timer.hpp"
 using namespace std;
 
 extern bool print_debug;
@@ -22,14 +23,23 @@ void init_skiplist(uint32_t height) {
                                           .height = height};
     push_task(-1, L3_INIT, &tit, sizeof(L3_insert_task));
 
-    printf("INIT UPPER PART -INF\n");
+    // printf("INIT UPPER PART -INF\n");
     ASSERT(exec());  // insert upper part -INF
     // print_log();
 }
 
+void tick() {
+    init_send_buffer();
+    for (int i = 0; i < nr_of_dpus; i ++) {
+        tick_task tt = (tick_task){.nothing = 0};
+        push_task(i, TICK, &tt, sizeof(tick_task));
+    }
+    exec();
+}
+
 void get(int length) {
     epoch_number ++;
-    printf("START GET\n");
+    // printf("START GET\n");
 
     libcuckoo::cuckoohash_map<int64_t, int> key2offset;
     key2offset.reserve(length * 2);
@@ -49,6 +59,7 @@ void get(int length) {
     });
     exec();
 
+
     apply_to_all_reply(false, [&](task *t) {
         L3_get_reply *tsr = (L3_get_reply *)t->buffer;
         int j = 0;
@@ -64,11 +75,16 @@ void get(int length) {
     });
 }
 
+timer predecessor_task_generate("predecessor_task_generate");
+timer predecessor_get_result("predecessor_get_result");
+
 void predecessor(int length) {
     epoch_number ++;
-    printf("START PREDECESSOR\n");
+    // printf("START PREDECESSOR\n");
     // sort(op_keys, op_keys + length);
 
+
+    predecessor_task_generate.start();
     libcuckoo::cuckoohash_map<int64_t, int> key2offset;
     key2offset.reserve(length * 2);
 
@@ -86,14 +102,13 @@ void predecessor(int length) {
             // cout<<op_keys[j]<<endl;
         }
     });
-    // apply_to_all_request(false, [&](task *t) {
-    //     L3_search_task *tst = (L3_search_task *)t->buffer;
-    //     cout<<tst->key<<endl;
-    // });
-    exec();
-    // print_log();
+    predecessor_task_generate.end();
 
-    apply_to_all_reply(false, [&](task *t) {
+    exec();
+
+    predecessor_get_result.start();
+
+    apply_to_all_reply(true, [&](task *t) {
         // assert(t->type == L3_SEARCH);
         L3_search_reply *tsr = (L3_search_reply *)t->buffer;
         int j = 0;
@@ -107,6 +122,8 @@ void predecessor(int length) {
         assert(key2offset.find(op_keys[i], j));
         op_results[i] = op_results[j];
     });
+
+    predecessor_get_result.end();
 
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld %ld\n", op_keys[i], op_results[i]);
@@ -127,7 +144,7 @@ void deduplication(int64_t *arr, int &length) {  // assume sorted
 void insert(int length) {
     epoch_number ++;
     deduplication(op_keys, length);
-    printf("\n*** Insert: L3 insert\n");
+    // printf("\n*** Insert: L3 insert\n");
     init_send_buffer();
     for (int i = 0; i < length; i++) {
         int h = 1;
@@ -138,10 +155,10 @@ void insert(int length) {
         L3_insert_task tit =
             (L3_insert_task){.key = op_keys[i], .addr = null_pptr, .height = h};
         push_task(-1, L3_INSERT, &tit, sizeof(L3_insert_task));
-        if (print_debug) {
-            printf("upper insert %ld %d %d-%x\n", op_keys[i], h, tit.addr.id,
-                   tit.addr.addr);
-        }
+        // if (print_debug) {
+        //     printf("upper insert %ld %d %d-%x\n", op_keys[i], h, tit.addr.id,
+        //            tit.addr.addr);
+        // }
     }
     exec();
     print_log();
@@ -156,15 +173,15 @@ void remove(int length) {
     // exit(-1);
 
     // remove upper part
-    printf("\n*** Remove: remove upper part\n");
+    // printf("\n*** Remove: remove upper part\n");
     init_send_buffer();
 
     for (int i = 0; i < length; i++) {
         L3_remove_task trt = (L3_remove_task){.key = op_keys[i]};
         push_task(-1, L3_REMOVE, &trt, sizeof(L3_remove_task));
-        if (print_debug) {
-            printf("upper remove %ld\n", op_keys[i]);
-        }
+        // if (print_debug) {
+        //     printf("upper remove %ld\n", op_keys[i]);
+        // }
     }
     exec();
     if (print_debug) {

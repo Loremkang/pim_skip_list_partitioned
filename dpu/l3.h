@@ -22,8 +22,7 @@ static inline void L3_init(L3_insert_task *tit) {
     // assert(l3cnt == 8);
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     storage_init();
-    uint32_t actual_size;
-    root = get_new_L3(LLONG_MIN, tit->height, tit->addr, &actual_size);
+    root = get_new_L3(LLONG_MIN, tit->height, tit->addr);
     L3_insert_reply tir = (L3_insert_reply){.key = tit->key, .addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
     push_task(L3_INIT, &tir, sizeof(L3_insert_reply));
 }
@@ -101,8 +100,7 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
     int8_t max_height = 0;
     mL3ptr *newnode = mem_alloc(sizeof(mL3ptr) * length);
     for (int i = 0; i < length; i++) {
-        uint32_t actual_size;
-        newnode[i] = get_new_L3(keys[i], heights[i], addrs[i], &actual_size);
+        newnode[i] = get_new_L3(keys[i], heights[i], addrs[i]);
         if (heights[i] > max_height) {
             max_height = heights[i];
         }
@@ -323,8 +321,7 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
 }
 
 static inline void L3_insert(L3_insert_task *tit, mL3ptr *rightmost) {
-    uint32_t actual_size;
-    mL3ptr newnode = get_new_L3(tit->key, tit->height, tit->addr, &actual_size);
+    mL3ptr newnode = get_new_L3(tit->key, tit->height, tit->addr);
     if (rightmost != NULL) {
         for (int i = 0; i < tit->height; i++) {
             rightmost[i] = newnode;
@@ -452,38 +449,47 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
             // do nothing
         }
     }
-}
+    
+    barrier_wait(&L3_barrier);
 
-static inline void L3_remove(L3_remove_task *trt) {
-    uint32_t htv = ht_search(trt->key, L3_ht_get);
-    if (htv == INVALID_DPU_ADDR) {
-        // assert(false); // not found;
-        IN_DPU_ASSERT(false, "L3remove: key not found\n");
-    }
-    mL3ptr tmp = (mL3ptr)htv;
-
-    // mL3ptr tmp = ht_get_L3(trt->key);
-    // assert(tmp->key == trt->key);
-    IN_DPU_ASSERT(tmp->key == trt->key, "L3remove: wrong key found\n");
-    for (int ht = 0; ht < tmp->height; ht++) {
-        pptr l = tmp->left[ht], r = tmp->right[ht];
-        mL3ptr ln = (mL3ptr)l.addr, rn = (mL3ptr)r.addr;
-        // assert(l.id != INVALID_DPU_ID);
-        IN_DPU_ASSERT(l.id != INVALID_DPU_ID, "L3remove: left doesn't exist\n");
-        if (r.id != INVALID_DPU_ID) {
-            // assert(rn->left[ht].id == DPU_ID);
-            IN_DPU_ASSERT(rn->left[ht].id == DPU_ID,
-                          "L3remove: left.id illegal\n");
-            rn->left[ht] = l;
+    for (int i = 0; i < length; i ++) {
+        if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
+            ht_delete(l3ht, hash_to_addr(keys[i], 0, LX_HASHTABLE_SIZE),
+              (uint32_t)nodes[i]);
         }
-        ln->right[ht] = r;
-        // tmp->left[ht] = null_pptr;
-        // tmp->right[ht] = null_pptr;
     }
-    // printf("\n\t%lld\n", trt->key);
-    ht_delete(l3ht, hash_to_addr(trt->key, 0, LX_HASHTABLE_SIZE),
-              (uint32_t)tmp);
 }
+
+// static inline void L3_remove(L3_remove_task *trt) {
+//     uint32_t htv = ht_search(trt->key, L3_ht_get);
+//     if (htv == INVALID_DPU_ADDR) {
+//         // assert(false); // not found;
+//         IN_DPU_ASSERT(false, "L3remove: key not found\n");
+//     }
+//     mL3ptr tmp = (mL3ptr)htv;
+
+//     // mL3ptr tmp = ht_get_L3(trt->key);
+//     // assert(tmp->key == trt->key);
+//     IN_DPU_ASSERT(tmp->key == trt->key, "L3remove: wrong key found\n");
+//     for (int ht = 0; ht < tmp->height; ht++) {
+//         pptr l = tmp->left[ht], r = tmp->right[ht];
+//         mL3ptr ln = (mL3ptr)l.addr, rn = (mL3ptr)r.addr;
+//         // assert(l.id != INVALID_DPU_ID);
+//         IN_DPU_ASSERT(l.id != INVALID_DPU_ID, "L3remove: left doesn't exist\n");
+//         if (r.id != INVALID_DPU_ID) {
+//             // assert(rn->left[ht].id == DPU_ID);
+//             IN_DPU_ASSERT(rn->left[ht].id == DPU_ID,
+//                           "L3remove: left.id illegal\n");
+//             rn->left[ht] = l;
+//         }
+//         ln->right[ht] = r;
+//         // tmp->left[ht] = null_pptr;
+//         // tmp->right[ht] = null_pptr;
+//     }
+//     // printf("\n\t%lld\n", trt->key);
+//     ht_delete(l3ht, hash_to_addr(trt->key, 0, LX_HASHTABLE_SIZE),
+//               (uint32_t)tmp);
+// }
 
 static inline void L3_sancheck() {
     int h = (int)root->height;

@@ -10,6 +10,7 @@
 #define L3_SEARCH 4
 #define L3_SANCHECK 5
 #define L3_GET 6
+#define TICK 7
 
 // #define LOWER_INIT 1
 // #define BUILD_UP_DOWN 3
@@ -41,12 +42,14 @@ typedef struct {
 
 typedef struct {
     int64_t key;
+    // int64_t offset;
 } L3_search_task;
 
 typedef struct {
     int64_t key;
     pptr addr;
     int64_t result_key;
+    // int64_t offset;
 } L3_search_reply;
 
 typedef struct {
@@ -62,6 +65,10 @@ typedef struct {
 typedef struct {
     int64_t nothing;
 } L3_sancheck_task;
+
+typedef struct {
+    int64_t nothing;
+} tick_task;
 
 typedef struct task {
     uint64_t type;

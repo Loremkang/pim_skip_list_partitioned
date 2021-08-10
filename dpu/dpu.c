@@ -175,6 +175,8 @@ void execute(mptask t, int l, int r) {
         if (tasklet_id == 0) {
             L3_sancheck();
         }
+    } else if (t->type == TICK) {
+        // do nothing;
     } else {
         IN_DPU_ASSERT(false, "Wrong Task Type\n");
         // assert(false);
