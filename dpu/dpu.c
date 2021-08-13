@@ -160,7 +160,7 @@ void execute(mptask t, int l, int r) {
                          (uint32_t)receive_buffer_offset[i]);
             init_task(&tst, t->buffer, sizeof(L3_search_task));
             // printf("%d*%lld\n", i, tst.key);
-            L3_search(tst.key, 0, 0, NULL);
+            L3_search(tst.key, tst.offset, 0, 0, NULL);
         }
         // EXIT();
     } else if (t->type == L3_GET) {

@@ -60,6 +60,7 @@ int64_t epoch_number;
 
 int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
+int8_t op_heights[BATCH_SIZE];
 
 void init_rand() {
     srand(time(NULL));
@@ -75,7 +76,7 @@ int main() {
     timer init_timer("init");
 
     init_timer.start();
-    DPU_ASSERT(dpu_alloc(MAX_DPU, "backend=hw", &dpu_set));
+    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=hw", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
@@ -86,18 +87,18 @@ int main() {
         dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
     }
 
-
     init_skiplist(14);
     init_test_framework();
     init_timer.end();
 
+    int BATCH_SIZE_PER_DPU = 500;
     for (int i = 0; i < 5; i ++) {
-        insert_test(500, true);
+        insert_test(BATCH_SIZE_PER_DPU, true);
     }
     for (int i = 0; i < 20; i ++) {
-        insert_test(500, true);
-        assert(predecessor_test(500 * MAX_DPU, true));
-        remove_test(500, true);
+        insert_test(BATCH_SIZE_PER_DPU, true);
+        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+        remove_test(BATCH_SIZE_PER_DPU, true);
     }
     print_all_timers();
     // init_timer.print();

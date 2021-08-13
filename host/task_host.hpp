@@ -8,6 +8,7 @@
 #include <cstdbool>
 #include <algorithm>
 #include <mutex>
+#include "timer.hpp"
 #include "common.h"
 using namespace std;
 
@@ -30,7 +31,6 @@ static uint64_t receive_buffer_task_count[MAX_DPU];
 // static uint8_t task_buffer[MAX_DPU][MAX_TASK_SIZE];
 
 inline void print_log(bool show_all_dpu = false) {
-    return;
     DPU_FOREACH(dpu_set, dpu) {
         DPU_ASSERT(dpu_log_read(dpu, stdout));
         if (!show_all_dpu) {
@@ -44,13 +44,12 @@ inline void init_send_buffer() {
     memset(send_buffer_task_count, 0, sizeof(send_buffer_task_count));
 }
 
-inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
+inline void push_task_thread_unsafe(int nodeid, uint64_t type, void* buffer, size_t length) {
     if (nodeid == -1) {
         for (int target = 0; target < nr_of_dpus; target++) {
-            push_task(target, type, buffer, length);
+            push_task_thread_unsafe(target, type, buffer, length);
         }
     } else {
-        send_buffer_mutex[nodeid].lock();
         assert(send_buffer_size[nodeid] + length + sizeof(uint64_t) <=
                MAX_TASK_BUFFER_SIZE_PER_DPU);
         assert(send_buffer_task_count[nodeid] + 1 <= MAX_TASK_COUNT_PER_DPU);
@@ -61,6 +60,17 @@ inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
         memcpy(pos, &type, sizeof(uint64_t));
         memcpy(pos + sizeof(uint64_t), buffer, length);
         send_buffer_size[nodeid] += length + sizeof(uint64_t);
+    }
+}
+
+inline void push_task(int nodeid, uint64_t type, void* buffer, size_t length) {
+    if (nodeid == -1) {
+        for (int target = 0; target < nr_of_dpus; target++) {
+            push_task(target, type, buffer, length);
+        }
+    } else {
+        send_buffer_mutex[nodeid].lock();
+        push_task_thread_unsafe(nodeid, type, buffer, length);
         send_buffer_mutex[nodeid].unlock();
     }
 }
@@ -156,7 +166,7 @@ inline bool send_task() {
                              XSTR(DPU_RECEIVE_BUFFER_TASK_COUNT), 0,
                              sizeof(uint64_t), DPU_XFER_ASYNC));
 
-    DPU_ASSERT(dpu_sync(dpu_set));
+    // DPU_ASSERT(dpu_sync(dpu_set));
 
     return true;
 }
@@ -213,13 +223,26 @@ inline bool receive_task() {
     return true;
 }
 
+timer send_task_timer("send_task");
+timer receive_task_timer("receive_task");
+timer execute_timer("execute");
+
 inline bool exec() {
     memset(receive_buffer_size, 0, sizeof(receive_buffer_size));
     memset(receive_buffer_task_count, 0, sizeof(receive_buffer_task_count));
+
+    send_task_timer.start();
     if (send_task()) {
-        DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
-        return receive_task();
+        send_task_timer.end();
+        execute_timer.start();
+        DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
+        execute_timer.end();
+        receive_task_timer.start();
+        bool ret = receive_task();
+        receive_task_timer.end();
+        return ret;
     } else {
         return false;
     }
+
 }

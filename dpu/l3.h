@@ -48,7 +48,7 @@ static inline void L3_get(int64_t key) {
     push_task(L3_GET, &tgr, sizeof(L3_get_reply));
 }
 
-static inline int64_t L3_search(int64_t key, int record_height_l,
+static inline int64_t L3_search(int64_t key, int64_t offset, int record_height_l,
                                 int record_height_r, mL3ptr *rightmost) {
     mL3ptr tmp = root;
     int64_t ht = root->height - 1;
@@ -67,7 +67,7 @@ static inline int64_t L3_search(int64_t key, int record_height_l,
     // IN_DPU_ASSERT(rightmost != NULL, "L3 search: rightmost error");
     if (rightmost == NULL) {  // pure search task
         L3_search_reply tsr = (L3_search_reply){
-            .key = key, .addr = tmp->down, .result_key = tmp->key};
+            .key = key, .addr = tmp->down, .result_key = tmp->key, .offset = offset};
         push_task(L3_SEARCH, &tsr, sizeof(L3_search_reply));
     }
     return tmp->key;
@@ -125,7 +125,7 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
 
     if (length > 0) {
         int i = 0;
-        L3_search(keys[i], 0, heights[i], predecessor);
+        L3_search(keys[i], 0, 0, heights[i], predecessor);
         for (int ht = 0; ht < heights[i]; ht++) {
             left_predecessor[ht] = right_predecessor[ht] = predecessor[ht];
             left_newnode[ht] = right_newnode[ht] = newnode[i];
@@ -134,7 +134,7 @@ static inline void L3_insert_parallel(int length, int64_t *keys,
     }
 
     for (int i = 1; i < length; i++) {
-        L3_search(keys[i], 0, heights[i], predecessor);
+        L3_search(keys[i], 0, 0, heights[i], predecessor);
         int minheight = (max_height < heights[i]) ? max_height : heights[i];
         for (int ht = 0; ht < minheight; ht++) {
             if (right_predecessor[ht] == predecessor[ht]) {

@@ -42,14 +42,14 @@ typedef struct {
 
 typedef struct {
     int64_t key;
-    // int64_t offset;
+    int64_t offset;
 } L3_search_task;
 
 typedef struct {
     int64_t key;
     pptr addr;
     int64_t result_key;
-    // int64_t offset;
+    int64_t offset;
 } L3_search_reply;
 
 typedef struct {

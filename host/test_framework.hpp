@@ -78,7 +78,8 @@ bool get_test(int length, bool check_result) {
 timer predecessor_timer("predecessor");
 
 bool predecessor_test(int length, bool check_result) {
-    parlay::parallel_for(0, length, [&](size_t i) { op_keys[i] = rand(); });
+    parlay::parallel_for(0, length,
+                         [&](size_t i) { op_keys[i] = randint64(); });
     // sort(op_keys, op_keys + length);
     cout << "\n*** Start Predecessor Test ***" << endl;
     predecessor_timer.start();
