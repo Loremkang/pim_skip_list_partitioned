@@ -2,7 +2,7 @@ DPU_DIR := dpu
 HOST_DIR := host
 BUILDDIR ?= build
 NR_TASKLETS ?= 12
-NR_DPUS ?= 2560
+NR_DPUS ?= 64
 CC = g++
 
 define conf_filename

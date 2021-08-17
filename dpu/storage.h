@@ -137,16 +137,16 @@ static inline L3node* init_L3(int64_t key, int height, pptr down,
 }
 
 static inline __mram_ptr void* reserve_space_L3(uint32_t size) {
-    mutex_lock(get_new_L3_lock);
+    // mutex_lock(get_new_L3_lock);
     __mram_ptr void* ret = l3buffer + l3cnt;
     l3cnt += size;
-    mutex_unlock(get_new_L3_lock);
+    // mutex_unlock(get_new_L3_lock);
     return ret;
 }
 
-static inline mL3ptr get_new_L3(int64_t key, int height, pptr down) {
+static inline mL3ptr get_new_L3(int64_t key, int height, pptr down, __mram_ptr void* maddr) {
     int size = L3_node_size(height);
-    __mram_ptr void* maddr = reserve_space_L3(size);
+    // __mram_ptr void* maddr = reserve_space_L3(size);
     uint8_t buffer[40 + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, height, down, buffer, maddr);
     mram_write((void*)nn, maddr, size);

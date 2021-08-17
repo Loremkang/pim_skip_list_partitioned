@@ -30,7 +30,9 @@ static inline void L3_init(L3_insert_task *tit) {
     // assert(l3cnt == 8);
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     storage_init();
-    root = get_new_L3(LLONG_MIN, tit->height, tit->addr);
+
+    __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
+    root = get_new_L3(LLONG_MIN, tit->height, tit->addr, maddr);
     L3_init_reply tir = (L3_insert_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
     mram_write(&tir, send_task_start, sizeof(L3_init_reply));
 }
@@ -103,14 +105,29 @@ static inline void print_nodes(int length, mL3ptr *newnode, bool quit, bool lock
 
 static inline void L3_insert_parallel(int length, int l, int64_t *keys,
                                       int8_t *heights, pptr *addrs,
+                                      uint32_t *newnode_size,
                                       int8_t *max_height_shared,
                                       mL3ptr *right_predecessor_shared,
                                       mL3ptr *right_newnode_shared) {
     uint32_t tasklet_id = me();
     int8_t max_height = 0;
     mL3ptr *newnode = mem_alloc(sizeof(mL3ptr) * length);
+
+    barrier_wait(&L3_barrier);
+
+    if (tasklet_id == 0) {
+        for (int i = 0; i < NR_TASKLETS; i++) {
+            newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
+        }
+    }
+
+    barrier_wait(&L3_barrier);
+
+    __mram_ptr void* maddr = (__mram_ptr void*) newnode_size[tasklet_id];
+
     for (int i = 0; i < length; i++) {
-        newnode[i] = get_new_L3(keys[i], heights[i], addrs[i]);
+        newnode[i] = get_new_L3(keys[i], heights[i], addrs[i], maddr);
+        maddr += L3_node_size(heights[i]);
         if (heights[i] > max_height) {
             max_height = heights[i];
         }
@@ -265,7 +282,8 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
         tir[i] = (L3_insert_reply){
             .addr = (pptr){.id = DPU_ID, .addr = (uint32_t)newnode[i]}};
     }
-    __mram_ptr L3_insert_reply* dst = (__mram_ptr L3_insert_reply*)send_task_start;
+    __mram_ptr L3_insert_reply *dst =
+        (__mram_ptr L3_insert_reply *)send_task_start;
     mram_write(tir, &dst[l], sizeof(L3_insert_reply) * length);
 }
 

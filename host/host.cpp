@@ -76,7 +76,7 @@ int main() {
     timer init_timer("init");
 
     init_timer.start();
-    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=hw", &dpu_set));
+    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=simulator", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));

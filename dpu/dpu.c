@@ -62,6 +62,7 @@ __mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
 #define MRAM_BUFFER_SIZE (128)
 mL3ptr *bufferA_shared, *bufferB_shared;
 int8_t *max_height_shared;
+uint32_t *newnode_size;
 
 __mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
 __host int l3cnt = 8;
@@ -96,6 +97,7 @@ void execute(int l, int r) {
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
+
             int step = 10;
             L3_insert_task* buffer = mem_alloc(sizeof(L3_insert_task) * step);
 
@@ -103,6 +105,7 @@ void execute(int l, int r) {
             __mram_ptr L3_insert_task* tit = (__mram_ptr L3_insert_task*) receive_task_start;
             tit += l;
 
+            newnode_size[tasklet_id] = 0;
             for (int i = 0; i < length; i += step) {
                 mram_read(tit + i, buffer, sizeof(L3_insert_task) * step);
                 for (int j = 0; j < step; j ++) {
@@ -110,6 +113,7 @@ void execute(int l, int r) {
                     keys[i + j] = buffer[j].key;
                     addrs[i + j] = buffer[j].addr;
                     heights[i + j] = buffer[j].height;
+                    newnode_size[tasklet_id] += L3_node_size(heights[i + j]);
                     IN_DPU_ASSERT(
                         heights[i + j] > 0 && heights[i + j] < MAX_L3_HEIGHT,
                         "execute: invalid height\n");
@@ -122,7 +126,7 @@ void execute(int l, int r) {
             mL3ptr* right_predecessor_shared = bufferA_shared;
             mL3ptr* right_newnode_shared = bufferB_shared;
             L3_insert_parallel(length, l, keys, heights, addrs,
-                               max_height_shared, right_predecessor_shared,
+                               newnode_size, max_height_shared, right_predecessor_shared,
                                right_newnode_shared);
             break;
         }
@@ -188,6 +192,7 @@ int main() {
         bufferB_shared =
             mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
         max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
+        newnode_size = mem_alloc(sizeof(uint32_t) * NR_TASKLETS);
         for (int i = 0; i < NR_TASKLETS; i++) {
             max_height_shared[i] = 0;
         }
