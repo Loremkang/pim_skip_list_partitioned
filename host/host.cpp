@@ -92,13 +92,15 @@ int main() {
     init_timer.end();
 
     int BATCH_SIZE_PER_DPU = 500;
-    for (int i = 0; i < 5; i ++) {
+    for (int i = 0; i < 25; i ++) {
         insert_test(BATCH_SIZE_PER_DPU, true);
     }
+    extern timer send_task_timer;
+    send_task_timer.reset();
     for (int i = 0; i < 20; i ++) {
         insert_test(BATCH_SIZE_PER_DPU, true);
         assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-        remove_test(BATCH_SIZE_PER_DPU, true);
+        // remove_test(BATCH_SIZE_PER_DPU, true);
     }
     print_all_timers();
     // init_timer.print();

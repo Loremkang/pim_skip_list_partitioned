@@ -39,6 +39,10 @@ public:
         total_time += duration_cast<duration<double>>(end_time - start_time);
         count ++;
     }
+    void reset() {
+        total_time = duration<double>();
+        count = 0;
+    }
 };
 
 template <class F>
@@ -58,3 +62,8 @@ inline void print_all_timers() {
         timer->print();
     }
 }
+
+timer send_task_timer("send_task");
+timer receive_task_timer("receive_task");
+timer execute_timer("execute");
+timer exec_timer("exec");

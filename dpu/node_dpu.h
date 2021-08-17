@@ -4,6 +4,7 @@
 #include <mram.h>
 #include <perfcounter.h>
 #include <string.h>
+#include "util.h"
 
 typedef __mram_ptr pptr* mppptr;
 

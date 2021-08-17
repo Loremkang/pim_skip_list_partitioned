@@ -3,6 +3,7 @@
 #include "common.h"
 #include "node_dpu.h"
 #include "stdlib.h"
+#include "task_dpu.h"
 // #include "garbage_collection.h"
 
 typedef struct ht_slot {

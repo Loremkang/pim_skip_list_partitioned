@@ -164,10 +164,11 @@ void remove_test(int length, bool check_result) {
 
 void L3_sancheck() {
     cout << "\n*** Start L3 Sancheck ***" << endl;
-    init_send_buffer();
+    init_io_buffer(true);
+    set_io_buffer_type(L3_SANCHECK_TSK, EMPTY);
     L3_sancheck_task tst;
-    push_task(-1, L3_SANCHECK, &tst, sizeof(L3_sancheck_task));
-    exec();
+    push_task(&tst, sizeof(L3_sancheck_task), 0, -1);
+    ASSERT(!exec());
     print_log();
     cout << endl << "\n*** End L3 Sancheck ***" << endl;
 }
