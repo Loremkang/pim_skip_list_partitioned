@@ -17,6 +17,7 @@ public:
     // clock_t total_time;
     duration<double> total_time;
     int count;
+    bool on;
     high_resolution_clock::time_point start_time, end_time;
     timer(string _name) {
         name = _name;
@@ -31,13 +32,18 @@ public:
         printf("Occurance: %d\n", count);
         printf("\n");
     }
+    void turnon(bool val) {
+        on = val;
+    }
     void start() {
         start_time = high_resolution_clock::now();
     }
     void end() {
-        end_time = high_resolution_clock::now();
-        total_time += duration_cast<duration<double>>(end_time - start_time);
-        count ++;
+        if (on) {
+            end_time = high_resolution_clock::now();
+            total_time += duration_cast<duration<double>>(end_time - start_time);
+            count ++;
+        }
     }
     void reset() {
         total_time = duration<double>();
@@ -63,6 +69,19 @@ inline void print_all_timers() {
     }
 }
 
+inline void turnon_all_timers(bool val) {
+    for (auto& timer : all_timers)  // access by reference to avoid copying
+    {
+        timer->turnon(val);
+    }
+}
+
+inline void reset_all_timers() {
+    for (auto& timer : all_timers)  // access by reference to avoid copying
+    {
+        timer->reset();
+    }
+}
 timer send_task_timer("send_task");
 timer receive_task_timer("receive_task");
 timer execute_timer("execute");

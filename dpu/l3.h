@@ -5,6 +5,13 @@
 #include "storage.h"
 #include <barrier.h>
 #include <alloc.h>
+// #include <profiling.h>
+
+// PROFILING_INIT(prof_newnode);
+// PROFILING_INIT(prof_internal);
+// PROFILING_INIT(prof_external);
+// PROFILING_INIT(prof_finish);
+
 
 // BARRIER_INIT(L3_barrier, NR_TASKLETS);
 

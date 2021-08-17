@@ -32,7 +32,6 @@ static int64_t send_buffer_count[MAX_DPU];
 static int64_t receive_buffer_type[MAX_DPU];
 static int64_t receive_buffer_offset[MAX_DPU];
 static int64_t receive_buffer_count[MAX_DPU];
-static int64_t count_prefix_sum[MAX_DPU];
 
 static uint8_t io_buffer[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU]; // for broadcast, 0 as send, 1 as receive
 
@@ -101,10 +100,6 @@ inline void push_task(void* buffer, size_t length, size_t reply_length,
 template <class F, class T>
 inline void apply_to_all_reply(bool parallel, T t, F f) {
     assert(buffer_state == receive_broadcast || buffer_state == receive_direct);
-    // count_prefix_sum[0] = receive_buffer_count[0];
-    // for (int i = 0; i < nr_of_dpus; i ++) {
-    //     count_prefix_sum[i] = count_prefix_sum[i - 1] + receive_buffer_count[i];
-    // }
     auto kernel = [&](size_t i) {
         T* tasks = (T*)(&io_buffer[i][8]);
         for (int j = 0; j < receive_buffer_count[i]; j++) {
@@ -150,7 +145,9 @@ inline bool send_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     if (buffer_state == send_broadcast) {
         if (send_buffer_count[0] == 0) {
-            return false;
+            cout<<"Empty Send Task"<<endl;
+            ASSERT(false);
+            // return false;
         }
         printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0]);
         memcpy(io_buffer[0], &epoch_number, sizeof(int64_t));
@@ -173,7 +170,9 @@ inline bool send_task() {
         }
         printf("Parallel Send: task size=%lu\n", maxsize);
         if (maxsize == 24) {
-            return false;
+            cout<<"Empty Send Task"<<endl;
+            ASSERT(false);
+            // return false;
         }
         DPU_FOREACH(dpu_set, dpu, each_dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, &io_buffer[each_dpu][0]));
@@ -188,10 +187,12 @@ inline bool send_task() {
 inline bool receive_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     if (buffer_state == send_broadcast) {
+        printf("Broadcast Receive: task size=%lu\n", receive_buffer_offset[1]);
         if (receive_buffer_count[1] == 0) {
+            DPU_ASSERT(dpu_sync(dpu_set));
+            buffer_state = idle;
             return false;
         }
-        printf("Broadcast Receive: task size=%lu\n", receive_buffer_offset[1]);
         DPU_FOREACH(dpu_set, dpu, each_dpu) {
             if (each_dpu == 0) {
                 DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME,
@@ -207,6 +208,8 @@ inline bool receive_task() {
         }
         printf("Parallel Send: task size=%lu\n", maxsize);
         if (maxsize == 8) {
+            DPU_ASSERT(dpu_sync(dpu_set));        
+            buffer_state = idle;
             return false;
         }
         DPU_FOREACH(dpu_set, dpu, each_dpu) {

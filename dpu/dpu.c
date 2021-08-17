@@ -59,6 +59,7 @@ __host int64_t dpu_task_count;
 // Node Buffers & Hash Tables
 __mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
 
+#define MRAM_BUFFER_SIZE (128)
 mL3ptr *bufferA_shared, *bufferB_shared;
 int8_t *max_height_shared;
 
@@ -95,47 +96,65 @@ void execute(int l, int r) {
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
+            int step = 10;
+            L3_insert_task* buffer = mem_alloc(sizeof(L3_insert_task) * step);
+
 
             __mram_ptr L3_insert_task* tit = (__mram_ptr L3_insert_task*) receive_task_start;
             tit += l;
-            for (int i = 0; i < length; i++) {
-                keys[i] = tit[i].key;
-                addrs[i] = tit[i].addr;
-                heights[i] = tit[i].height;
-                IN_DPU_ASSERT(heights[i] > 0 && heights[i] < MAX_L3_HEIGHT,
-                              "execute: invalid height\n");
+
+            for (int i = 0; i < length; i += step) {
+                mram_read(tit + i, buffer, sizeof(L3_insert_task) * step);
+                for (int j = 0; j < step; j ++) {
+                    if (i + j >= length) break;
+                    keys[i + j] = buffer[j].key;
+                    addrs[i + j] = buffer[j].addr;
+                    heights[i + j] = buffer[j].height;
+                    IN_DPU_ASSERT(
+                        heights[i + j] > 0 && heights[i + j] < MAX_L3_HEIGHT,
+                        "execute: invalid height\n");
+                }
+                // keys[i] = tit[i].key;
+                // addrs[i] = tit[i].addr;
+                // heights[i] = tit[i].height;
             }
 
             mL3ptr* right_predecessor_shared = bufferA_shared;
             mL3ptr* right_newnode_shared = bufferB_shared;
-            L3_insert_parallel(length, l, keys, heights, addrs, max_height_shared,
-                               right_predecessor_shared, right_newnode_shared);
+            L3_insert_parallel(length, l, keys, heights, addrs,
+                               max_height_shared, right_predecessor_shared,
+                               right_newnode_shared);
             break;
         }
 
         case L3_REMOVE_TSK: {
             int length = r - l;
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            __mram_ptr L3_remove_task* trt = (__mram_ptr L3_remove_task*)receive_task_start;
+            __mram_ptr L3_remove_task* trt =
+                (__mram_ptr L3_remove_task*)receive_task_start;
             trt += l;
-            for (int i = 0; i < length; i++) {
-                keys[i] = trt[i].key;
-            }
+            mram_read(trt, keys, sizeof(int64_t) * length);
+            // for (int i = 0; i < length; i++) {
+            // keys[i] = trt[i].key;
+            // }
 
             mL3ptr* left_node_shared = bufferA_shared;
             L3_remove_parallel(length, keys, max_height_shared,
                                left_node_shared);
             break;
         }
+
         case L3_SEARCH_TSK: {
-            __mram_ptr L3_search_task* tst = (__mram_ptr L3_search_task*)receive_task_start;
-            for (int i = l; i < r; i ++) {
+            __mram_ptr L3_search_task* tst =
+                (__mram_ptr L3_search_task*)receive_task_start;
+            for (int i = l; i < r; i++) {
                 L3_search(tst[i].key, i, 0, NULL);
             }
             break;
         }
         case L3_GET_TSK: {
-            __mram_ptr L3_get_task* tgt = (__mram_ptr L3_get_task*)receive_task_start;
+            __mram_ptr L3_get_task* tgt =
+                (__mram_ptr L3_get_task*)receive_task_start;
             for (int i = l; i < r; i++) {
                 L3_get(tgt[i].key, i);
             }

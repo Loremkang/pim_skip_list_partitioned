@@ -91,16 +91,21 @@ int main() {
     init_test_framework();
     init_timer.end();
 
+    turnon_all_timers(false);
+
     int BATCH_SIZE_PER_DPU = 500;
     for (int i = 0; i < 25; i ++) {
         insert_test(BATCH_SIZE_PER_DPU, true);
     }
-    extern timer send_task_timer;
-    send_task_timer.reset();
-    for (int i = 0; i < 20; i ++) {
+
+    turnon_all_timers(true);
+
+    for (int i = 0; i < 50; i ++) {
+        // turnon_all_timers(true);
         insert_test(BATCH_SIZE_PER_DPU, true);
+        // turnon_all_timers(false);
         assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-        // remove_test(BATCH_SIZE_PER_DPU, true);
+        remove_test(BATCH_SIZE_PER_DPU, true);
     }
     print_all_timers();
     // init_timer.print();

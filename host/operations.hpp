@@ -72,8 +72,8 @@ void predecessor(int length) {
     init_io_buffer(false);
     set_io_buffer_type(L3_SEARCH_TSK, L3_SEARCH_REP);
     parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
-        int l = length * i / nr_of_dpus;
-        int r = length * (i + 1) / nr_of_dpus;
+        int l = (int64_t)length * i / nr_of_dpus;
+        int r = (int64_t)length * (i + 1) / nr_of_dpus;
         for (int j = l; j < r; j++) {
             L3_search_task tst = (L3_search_task){.key = op_keys[j]};
             push_task(&tst, sizeof(L3_search_task), sizeof(L3_search_reply), i);
@@ -88,15 +88,13 @@ void predecessor(int length) {
     // L3_search_reply tsr* = io_buffer[8];
     L3_search_reply _;
     apply_to_all_reply(true, _, [&](L3_search_reply tsr, int i, int j) {
-        int offset = length * i / nr_of_dpus + j;
-        cout<<offset<<endl;
-        return;
-        // printf("%d %d %lld\n", i, j, tsr.result_key);
-        ASSERT(offset < (length * (i + 1) / nr_of_dpus));
+        int offset = (int64_t)length * i / nr_of_dpus + j;
+        ASSERT(offset >= 0 && offset < ((int64_t)length * (i + 1) / nr_of_dpus));
         op_results[offset] = tsr.result_key;
     });
 
     predecessor_get_result.end();
+
 
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld %ld\n", op_keys[i], op_results[i]);
@@ -148,7 +146,6 @@ void insert(int length) {
 timer remove_task_generate("remove_task_generate");
 
 void remove(int length) {
-
     remove_task_generate.start();
     epoch_number++;
     deduplication(op_keys, length);
@@ -157,11 +154,12 @@ void remove(int length) {
 
     for (int i = 0; i < length; i++) {
         L3_remove_task trt = (L3_remove_task){.key = op_keys[i]};
-        push_task(&trt, sizeof(L3_REMOVE_TSK), 0, -1);
+        push_task(&trt, sizeof(L3_remove_task), 0, -1);
     }
     remove_task_generate.end();
 
     ASSERT(!exec());
+    // buffer_state = idle;
     // if (print_debug) {
     //     print_log();
     // }
