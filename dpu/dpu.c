@@ -39,6 +39,7 @@
 #include "common.h"
 #include "task_dpu.h"
 #include "l3.h"
+#include "l2.h"
 
 /* -------------- Storage -------------- */
 
@@ -50,42 +51,75 @@ BARRIER_INIT(init_barrier, NR_TASKLETS);
 // __host uint64_t task_type;
 
 // DPU ID
-__host int64_t DPU_ID;
+__host int64_t DPU_ID = -1;
 
 __host int64_t dpu_epoch_number;
 __host int64_t dpu_task_type;
 __host int64_t dpu_task_count;
 
-// Node Buffers & Hash Tables
-__mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
-
 #define MRAM_BUFFER_SIZE (128)
-mL3ptr *bufferA_shared, *bufferB_shared;
+void *bufferA_shared, *bufferB_shared;
 int8_t *max_height_shared;
 uint32_t *newnode_size;
 
+// Node Buffers & Hash Tables
+// L3
+__mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
+__host int l3htcnt = 0;
 __mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
 __host int l3cnt = 8;
-__host int l3htcnt = 0;
+
+// L2
+__mram_noinit ht_slot l2ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
+__host int l2htcnt = 0;
+__mram_noinit uint8_t l2buffer[LX_BUFFER_SIZE];
+__host int l2cnt = 8;
+
 
 __host mL3ptr root;
 
 __host __mram_ptr uint64_t* receive_buffer_offset;
 
+// send
 __host __mram_ptr uint8_t* receive_buffer = DPU_MRAM_HEAP_POINTER;
 __host __mram_ptr uint8_t* receive_task_start = DPU_MRAM_HEAP_POINTER + sizeof(int64_t) * 3;
-__host __mram_ptr uint8_t* send_buffer = DPU_MRAM_HEAP_POINTER + MAX_TASK_BUFFER_SIZE_PER_DPU;
-__host __mram_ptr uint8_t* send_task_start = DPU_MRAM_HEAP_POINTER + MAX_TASK_BUFFER_SIZE_PER_DPU + sizeof(int64_t);
+
+// receive
+__host __mram_ptr uint8_t* send_buffer = DPU_MRAM_HEAP_POINTER + DPU_SEND_BUFFER_OFFSET;
+__host __mram_ptr uint8_t* send_task_start = DPU_MRAM_HEAP_POINTER + DPU_SEND_BUFFER_OFFSET + sizeof(int64_t);
+
+// fixed length
+__host __mram_ptr int64_t* send_task_count = DPU_MRAM_HEAP_POINTER + DPU_SEND_BUFFER_OFFSET;
+__host __mram_ptr int64_t* send_size = DPU_MRAM_HEAP_POINTER + DPU_SEND_BUFFER_OFFSET + sizeof(int64_t);
+
 
 #define MRAM_TASK_BUFFER
 
+static inline void init(init_task *it) {
+    DPU_ID = it->id;
+    storage_init();
+}
+
 void execute(int l, int r) {
+    IN_DPU_ASSERT(dpu_task_type == INIT_TSK || DPU_ID != -1, "execute: id not initialized");
     uint32_t tasklet_id = me();
     // printf("EXEC ");
+    __mram_ptr int64_t* buffer_type = (__mram_ptr int64_t*)send_buffer;
+    *buffer_type = BUFFER_FIXED_LENGTH; // default
+
     switch (dpu_task_type) {
+        case INIT_TSK: {
+            if (tasklet_id == 0) {
+                init_task it;
+                mram_read(receive_task_start, &it, sizeof(init_task));
+                init(&it);
+            }
+            break;
+        }
+
         case L3_INIT_TSK: {
             if (tasklet_id == 0) {
-                L3_insert_task tit;
+                L3_init_task tit;
                 mram_read(receive_task_start, &tit, sizeof(L3_init_task));
                 L3_init(&tit);
             }
@@ -102,7 +136,8 @@ void execute(int l, int r) {
             L3_insert_task* buffer = mem_alloc(sizeof(L3_insert_task) * step);
 
 
-            __mram_ptr L3_insert_task* tit = (__mram_ptr L3_insert_task*) receive_task_start;
+            __mram_ptr L3_insert_task* tit =
+                (__mram_ptr L3_insert_task*)receive_task_start;
             tit += l;
 
             newnode_size[tasklet_id] = 0;
@@ -118,9 +153,6 @@ void execute(int l, int r) {
                         heights[i + j] > 0 && heights[i + j] < MAX_L3_HEIGHT,
                         "execute: invalid height\n");
                 }
-                // keys[i] = tit[i].key;
-                // addrs[i] = tit[i].addr;
-                // heights[i] = tit[i].height;
             }
 
             mL3ptr* right_predecessor_shared = bufferA_shared;
@@ -138,9 +170,6 @@ void execute(int l, int r) {
                 (__mram_ptr L3_remove_task*)receive_task_start;
             trt += l;
             mram_read(trt, keys, sizeof(int64_t) * length);
-            // for (int i = 0; i < length; i++) {
-            // keys[i] = trt[i].key;
-            // }
 
             mL3ptr* left_node_shared = bufferA_shared;
             L3_remove_parallel(length, keys, max_height_shared,
@@ -156,6 +185,7 @@ void execute(int l, int r) {
             }
             break;
         }
+
         case L3_GET_TSK: {
             __mram_ptr L3_get_task* tgt =
                 (__mram_ptr L3_get_task*)receive_task_start;
@@ -164,18 +194,82 @@ void execute(int l, int r) {
             }
             break;
         }
+
+        case L2_INIT_TSK: {
+            if (tasklet_id == 0) {
+                L2_init_task sit;
+                mram_read(receive_task_start, &sit, sizeof(L2_init_task));
+                L2_init(&sit);
+            }
+            break;
+        }
+
+        case L2_INSERT_TSK: {
+            int length = r - l;
+            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
+            pptr* addrs = mem_alloc(sizeof(pptr) * length);
+            int8_t* heights = mem_alloc(sizeof(int8_t) * length);
+
+            int step = 10;
+            L2_insert_task* buffer = mem_alloc(sizeof(L2_insert_task) * step);
+
+            __mram_ptr L2_insert_task* sit =
+                (__mram_ptr L2_insert_task*)receive_task_start;
+            sit += l;
+
+            newnode_size[tasklet_id] = 0;
+            for (int i = 0; i < length; i += step) {
+                mram_read(sit + i, buffer, sizeof(L2_insert_task) * step);
+                for (int j = 0; j < step; j++) {
+                    if (i + j >= length) break;
+                    keys[i + j] = buffer[j].key;
+                    addrs[i + j] = buffer[j].addr;
+                    heights[i + j] = buffer[j].height;
+                    newnode_size[tasklet_id] += L2_node_size(heights[i + j]);
+                    IN_DPU_ASSERT(
+                        heights[i + j] > 0 && heights[i + j] < LOWER_PART_HEIGHT,
+                        "execute: invalid height\n");
+                }
+            }
+            L2_insert_parallel(l, length, keys, heights, addrs, newnode_size);
+            break;
+        }
+
+        case L2_REMOVE_TSK: {
+            int length = r - l;
+            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
+            __mram_ptr L2_remove_task* trt =
+                (__mram_ptr L2_remove_task*)receive_task_start;
+            trt += l;
+            mram_read(trt, keys, sizeof(int64_t) * length);
+
+            int32_t* oldnode_size = bufferA_shared;
+            int32_t* oldnode_count = bufferB_shared;
+            L2_remove_parallel(length, keys, oldnode_size, oldnode_count);
+            break;
+        }
+
+        case L2_GET_TSK: {
+            __mram_ptr L2_get_task* sgt =
+                (__mram_ptr L2_get_task*)receive_task_start;
+            for (int i = l; i < r; i++) {
+                L2_get(sgt[i].key, i);
+            }
+            break;
+        }
+
         case L3_SANCHECK_TSK: {
             if (tasklet_id == 0) {
                 L3_sancheck();
             }
             break;
         }
+
         default: {
             IN_DPU_ASSERT(false, "Wrong Task Type\n");
             break;
         }
     }
-    IN_DPU_SUCCEES();
 }
 
 void garbage_func();

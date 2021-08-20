@@ -88,6 +88,7 @@ void predecessor(int length) {
     // L3_search_reply tsr* = io_buffer[8];
     L3_search_reply _;
     apply_to_all_reply(true, _, [&](L3_search_reply tsr, int i, int j) {
+        ASSERT(buffer_state == receive_direct);
         int offset = (int64_t)length * i / nr_of_dpus + j;
         ASSERT(offset >= 0 && offset < ((int64_t)length * (i + 1) / nr_of_dpus));
         op_results[offset] = tsr.result_key;

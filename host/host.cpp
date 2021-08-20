@@ -67,6 +67,16 @@ void init_rand() {
     // srand(147);
 }
 
+void init_dpus() {
+    init_io_buffer(false);
+    set_io_buffer_type(INIT_TSK, EMPTY);
+    for (int i = 0; i < nr_of_dpus; i ++) {
+        init_task it = (init_task){.id = i};
+        push_task(&it, sizeof(init_task), 0, i);
+    }
+    ASSERT(!exec());
+}
+
 /**
  * @brief Main of the Host Application.
  */
@@ -82,10 +92,7 @@ int main() {
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
     printf("Allocated %d DPU(s)\n", nr_of_dpus);
 
-    DPU_FOREACH(dpu_set, dpu, each_dpu) {
-        uint64_t id = each_dpu;
-        dpu_copy_to(dpu, XSTR(DPU_ID), 0, &id, sizeof(uint64_t));
-    }
+    init_dpus();
 
     init_skiplist(14);
     init_test_framework();

@@ -20,6 +20,10 @@
 #define MAX_TASK_COUNT_PER_DPU (512)
 #define MAX_L3_HEIGHT (20)
 
+/* DPU offsets */
+
+#define DPU_SEND_BUFFER_OFFSET (MAX_TASK_BUFFER_SIZE_PER_DPU)
+
 /* DPU variable that will be read of write by the host */
 #define DPU_ID id
 #define INVALID_DPU_ID ((uint32_t)-1)
@@ -30,6 +34,9 @@
 // #define BUFFER_SIZE (200)
 // #define LOWER_PART_HEIGHT (6)
 #define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU)
+
+// 12 levels
+#define LOWER_PART_HEIGHT (12)
 
 // L0,1,2,3 12MB
 #define LX_BUFFER_SIZE (12 << 20)

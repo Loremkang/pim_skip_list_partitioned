@@ -26,14 +26,11 @@ extern int64_t DPU_ID, dpu_epoch_number;
 extern __mram_ptr uint8_t* send_task_start;
 extern __mram_ptr ht_slot l3ht[]; 
 
-static inline void L3_init(L3_insert_task *tit) {
-    // assert(l3cnt == 8);
+static inline void L3_init(L3_init_task *tit) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
-    storage_init();
-
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
     root = get_new_L3(LLONG_MIN, tit->height, tit->addr, maddr);
-    L3_init_reply tir = (L3_insert_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
+    L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
     mram_write(&tir, send_task_start, sizeof(L3_init_reply));
 }
 
@@ -49,7 +46,7 @@ static inline int L3_ht_get(ht_slot v, int64_t key) {
 }
 
 static inline void L3_get(int64_t key, int i) {
-    uint32_t htv = ht_search(key, L3_ht_get);
+    uint32_t htv = ht_search(l3ht, key, L3_ht_get);
     // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
     L3_get_reply tgr =
         (L3_get_reply){//.key = key,
@@ -295,7 +292,7 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
     int8_t *heights = mem_alloc(sizeof(int8_t) * length);
     int8_t max_height = 0;
     for (int i = 0; i < length; i++) {
-        uint32_t htv = ht_search(keys[i], L3_ht_get);
+        uint32_t htv = ht_search(l3ht, keys[i], L3_ht_get);
         // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
         nodes[i] = (mL3ptr)htv;
         if (htv == INVALID_DPU_ADDR) {  // not found
@@ -371,7 +368,7 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
 
     for (int i = 0; i < length; i++) {
         if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
-            ht_delete(l3ht, hash_to_addr(keys[i], 0, LX_HASHTABLE_SIZE),
+            ht_delete(l3ht, &l3htcnt, hash_to_addr(keys[i], 0, LX_HASHTABLE_SIZE),
                       (uint32_t)nodes[i]);
         }
     }

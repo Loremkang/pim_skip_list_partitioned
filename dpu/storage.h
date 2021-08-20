@@ -13,16 +13,23 @@ typedef struct ht_slot {
 
 #define null_ht_slot ((ht_slot){.pos = 0, .v = 0})
 
-MUTEX_INIT(get_new_L3_lock);
-MUTEX_INIT(ht_lock);
 
 // #define LX_HASHTABLE_SIZE (1 << 10)
-
+// L3
+MUTEX_INIT(get_new_L3_lock);
+MUTEX_INIT(ht_lock);
 extern __mram_ptr ht_slot l3ht[];  // must be 8 bytes aligned. 0 as null.
 extern int l3htcnt;
-
 extern __mram_ptr uint8_t l3buffer[];
 extern int l3cnt;
+
+// L2
+MUTEX_INIT(get_new_L2_lock);
+extern __mram_ptr ht_slot l2ht[];  // must be 8 bytes aligned. 0 as null.
+extern int l2htcnt;
+extern __mram_ptr uint8_t l2buffer[];
+extern int l2cnt;
+
 extern mL3ptr root;
 
 // __mram_noinit uint8_t l2buffer[LX_BUFFER_SIZE];
@@ -38,14 +45,21 @@ extern mL3ptr root;
 // __mram_ptr uint8_t* l1ht[LX_HASHTABLE_SIZE];
 // __mram_ptr uint8_t* l0ht[LX_HASHTABLE_SIZE];
 
+
+__host bool storage_inited = false;
 static inline void storage_init() {
+    if (storage_inited) {
+        return;
+    }
+    storage_inited = true;
     ht_slot hs = null_ht_slot;
     for (int i = 0; i < LX_HASHTABLE_SIZE; i++) {
         l3ht[i] = hs;
+        l2ht[i] = hs;
     }
     // L3_gc_init();
 }
-static inline void ht_insert(__mram_ptr ht_slot* ht, int32_t pos,
+static inline void ht_insert(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
                              uint32_t val) {
     mutex_lock(ht_lock);
     int ipos = pos;
@@ -56,7 +70,7 @@ static inline void ht_insert(__mram_ptr ht_slot* ht, int32_t pos,
         IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
     ht[pos] = (ht_slot){.pos = ipos, .v = val};
-    l3htcnt++;
+    *cnt = *cnt + 1;
     mutex_unlock(ht_lock);
 }
 
@@ -68,7 +82,7 @@ static inline bool ht_no_greater_than(int a, int b) {  // a <= b with wrapping
     return delta < (LX_HASHTABLE_SIZE >> 1);
 }
 
-static inline void ht_delete(__mram_ptr ht_slot* ht, int32_t pos,
+static inline void ht_delete(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
                              uint32_t val) {
     mutex_lock(ht_lock);
     int ipos = pos;  // initial position
@@ -94,15 +108,16 @@ static inline void ht_delete(__mram_ptr ht_slot* ht, int32_t pos,
         pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
         IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
-    l3htcnt--;
+    *cnt = *cnt - 1;
     mutex_unlock(ht_lock);
 }
 
-static inline uint32_t ht_search(int64_t key, int (*filter)(ht_slot, int64_t)) {
+static inline uint32_t ht_search(__mram_ptr ht_slot* ht, int64_t key,
+                                 int (*filter)(ht_slot, int64_t)) {
     int ipos = hash_to_addr(key, 0, LX_HASHTABLE_SIZE);
     int pos = ipos;
     while (true) {
-        ht_slot hs = l3ht[pos];  // pull to wram
+        ht_slot hs = ht[pos];  // pull to wram
         int v = filter(hs, key);
         if (v == -1) {  // empty slot
             return INVALID_DPU_ADDR;
@@ -116,6 +131,7 @@ static inline uint32_t ht_search(int64_t key, int (*filter)(ht_slot, int64_t)) {
     }
 }
 
+// L3
 static inline uint32_t L3_node_size(int height) {
     return sizeof(L3node) + sizeof(pptr) * height * 2;
 }
@@ -127,8 +143,7 @@ static inline L3node* init_L3(int64_t key, int height, pptr down,
     nn->height = height;
     nn->down = down;
     nn->left = (mppptr)(maddr + sizeof(L3node));
-    nn->right =
-        (mppptr)(maddr + sizeof(L3node) + sizeof(pptr) * height);
+    nn->right = (mppptr)(maddr + sizeof(L3node) + sizeof(pptr) * height);
     // for (int i = 0; i < sizeof(pptr) * height * 2; i ++) {
     //     buffer[sizeof(L3node) + i] = (uint8_t)-1;
     // }
@@ -147,9 +162,44 @@ static inline __mram_ptr void* reserve_space_L3(uint32_t size) {
 static inline mL3ptr get_new_L3(int64_t key, int height, pptr down, __mram_ptr void* maddr) {
     int size = L3_node_size(height);
     // __mram_ptr void* maddr = reserve_space_L3(size);
-    uint8_t buffer[40 + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
+    uint8_t buffer[sizeof(L3node) + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, height, down, buffer, maddr);
     mram_write((void*)nn, maddr, size);
-    ht_insert(l3ht, hash_to_addr(key, 0, LX_HASHTABLE_SIZE), (uint32_t)maddr);
+    ht_insert(l3ht, &l3htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
+              (uint32_t)maddr);
+    return maddr;
+}
+
+// L2
+static inline uint32_t L2_node_size(int height) {
+    return sizeof(L2node) + sizeof(int64_t) * height + sizeof(pptr) * height * 2;
+}
+
+static inline L2node* init_L2(int64_t key, int height, pptr down,
+                              uint8_t* buffer, __mram_ptr void* maddr) {
+    L2node* nn = (L2node*)buffer;
+    nn->key = key;
+    nn->height = height;
+    nn->down = down;
+    nn->chk = (mpint64_t)(maddr + sizeof(L2node));
+    nn->left = (mppptr)(maddr + sizeof(L2node) + sizeof(int64_t) * height);
+    nn->right = (mppptr)(maddr + sizeof(L2node) + sizeof(int64_t) * height + sizeof(pptr) * height);
+    memset(buffer + sizeof(L2node), -1, sizeof(int64_t) * height + sizeof(pptr) * height * 2);
+    return nn;
+}
+
+static inline __mram_ptr void* reserve_space_L2(uint32_t size) {
+    __mram_ptr void* ret = l2buffer + l2cnt;
+    l2cnt += size;
+    return ret;
+}
+
+static inline mL2ptr get_new_L2(int64_t key, int height, pptr down, __mram_ptr void* maddr) {
+    int size = L2_node_size(height);
+    uint8_t buffer[sizeof(L2node) + (sizeof(int64_t) + sizeof(pptr) * 2) * LOWER_PART_HEIGHT];
+    L2node* nn = init_L2(key, height, down, buffer, maddr);
+    mram_write((void*)nn, maddr, size);
+    ht_insert(l2ht, &l2htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
+              (uint32_t)maddr);
     return maddr;
 }
