@@ -36,6 +36,7 @@
 #include <perfcounter.h>
 #include <barrier.h>
 #include <string.h>
+#include <seqread.h>
 #include "common.h"
 #include "task_dpu.h"
 #include "l3.h"
@@ -132,33 +133,30 @@ void execute(int l, int r) {
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
 
-            int step = 10;
-            L3_insert_task* buffer = mem_alloc(sizeof(L3_insert_task) * step);
-
-
-            __mram_ptr L3_insert_task* tit =
+            __mram_ptr L3_insert_task* mram_tit =
                 (__mram_ptr L3_insert_task*)receive_task_start;
-            tit += l;
+            mram_tit += l;
+
+            seqreader_buffer_t local_cache = seqread_alloc();
+            seqreader_t sr;
+            L3_insert_task* tit = seqread_init(local_cache, mram_tit, &sr);
 
             newnode_size[tasklet_id] = 0;
-            for (int i = 0; i < length; i += step) {
-                mram_read(tit + i, buffer, sizeof(L3_insert_task) * step);
-                for (int j = 0; j < step; j ++) {
-                    if (i + j >= length) break;
-                    keys[i + j] = buffer[j].key;
-                    addrs[i + j] = buffer[j].addr;
-                    heights[i + j] = buffer[j].height;
-                    newnode_size[tasklet_id] += L3_node_size(heights[i + j]);
-                    IN_DPU_ASSERT(
-                        heights[i + j] > 0 && heights[i + j] < MAX_L3_HEIGHT,
-                        "execute: invalid height\n");
-                }
+            for (int i = 0; i < length; i++) {
+                if (i >= length) break;
+                keys[i] = tit->key;
+                addrs[i] = tit->addr;
+                heights[i] = tit->height;
+                newnode_size[tasklet_id] += L3_node_size(heights[i]);
+                tit = seqread_get(tit, sizeof(L3_insert_task), &sr);
+                IN_DPU_ASSERT(heights[i] > 0 && heights[i] < MAX_L3_HEIGHT,
+                              "execute: invalid height\n");
             }
 
             mL3ptr* right_predecessor_shared = bufferA_shared;
             mL3ptr* right_newnode_shared = bufferB_shared;
-            L3_insert_parallel(length, l, keys, heights, addrs,
-                               newnode_size, max_height_shared, right_predecessor_shared,
+            L3_insert_parallel(length, l, keys, heights, addrs, newnode_size,
+                               max_height_shared, right_predecessor_shared,
                                right_newnode_shared);
             break;
         }
@@ -210,26 +208,24 @@ void execute(int l, int r) {
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
 
-            int step = 10;
-            L2_insert_task* buffer = mem_alloc(sizeof(L2_insert_task) * step);
-
-            __mram_ptr L2_insert_task* sit =
+            __mram_ptr L2_insert_task* mram_sit =
                 (__mram_ptr L2_insert_task*)receive_task_start;
-            sit += l;
+            mram_sit += l;
+
+            seqreader_buffer_t local_cache = seqread_alloc();
+            seqreader_t sr;
+            L2_insert_task* sit = seqread_init(local_cache, mram_sit, &sr);
 
             newnode_size[tasklet_id] = 0;
-            for (int i = 0; i < length; i += step) {
-                mram_read(sit + i, buffer, sizeof(L2_insert_task) * step);
-                for (int j = 0; j < step; j++) {
-                    if (i + j >= length) break;
-                    keys[i + j] = buffer[j].key;
-                    addrs[i + j] = buffer[j].addr;
-                    heights[i + j] = buffer[j].height;
-                    newnode_size[tasklet_id] += L2_node_size(heights[i + j]);
-                    IN_DPU_ASSERT(
-                        heights[i + j] > 0 && heights[i + j] < LOWER_PART_HEIGHT,
-                        "execute: invalid height\n");
-                }
+            for (int i = 0; i < length; i++) {
+                if (i >= length) break;
+                keys[i] = sit->key;
+                addrs[i] = sit->addr;
+                heights[i] = sit->height;
+                newnode_size[tasklet_id] += L2_node_size(heights[i]);
+                sit = seqread_get(sit, sizeof(L2_insert_task), &sr);
+                IN_DPU_ASSERT(heights[i] > 0 && heights[i] < LOWER_PART_HEIGHT,
+                              "execute: invalid height\n");
             }
             L2_insert_parallel(l, length, keys, heights, addrs, newnode_size);
             break;
