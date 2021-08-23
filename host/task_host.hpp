@@ -224,7 +224,7 @@ inline bool receive_task() {
         for (int i = 0; i < nr_of_dpus; i++) {
             max_size = max(max_size, receive_buffer_offset[i]);
         }
-        printf("Parallel Send: task size=%lu\n", max_size);
+        printf("Parallel Receive: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t)) {
             DPU_ASSERT(dpu_sync(dpu_set));
             buffer_state = idle;

@@ -104,6 +104,8 @@ static inline void init(init_task *it) {
 void execute(int l, int r) {
     IN_DPU_ASSERT(dpu_task_type == INIT_TSK || DPU_ID != -1, "execute: id not initialized");
     uint32_t tasklet_id = me();
+    int length = r - l;
+    
     // printf("EXEC ");
     __mram_ptr int64_t* buffer_type = (__mram_ptr int64_t*)send_buffer;
     *buffer_type = BUFFER_FIXED_LENGTH; // default
@@ -128,7 +130,6 @@ void execute(int l, int r) {
         }
 
         case L3_INSERT_TSK: {
-            int length = r - l;
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
@@ -162,7 +163,6 @@ void execute(int l, int r) {
         }
 
         case L3_REMOVE_TSK: {
-            int length = r - l;
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             __mram_ptr L3_remove_task* trt =
                 (__mram_ptr L3_remove_task*)receive_task_start;
@@ -203,7 +203,6 @@ void execute(int l, int r) {
         }
 
         case L2_INSERT_TSK: {
-            int length = r - l;
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             pptr* addrs = mem_alloc(sizeof(pptr) * length);
             int8_t* heights = mem_alloc(sizeof(int8_t) * length);
@@ -228,6 +227,32 @@ void execute(int l, int r) {
                               "execute: invalid height\n");
             }
             L2_insert_parallel(l, length, keys, heights, addrs, newnode_size);
+            break;
+        }
+
+        case L2_BUILD_UP_TSK: {
+            __mram_ptr L2_build_up_task* mram_tasks =
+                (__mram_ptr L2_build_up_task*)receive_task_start;
+            mram_tasks += l;
+            
+            seqreader_buffer_t local_cache = seqread_alloc();
+            seqreader_t sr;
+            L2_build_up_task* sbut = seqread_init(local_cache, mram_tasks, &sr);
+
+            for (int i = 0; i < length; i++) {
+                L2_build_up(sbut->addr, sbut->up);
+                sbut = seqread_get(sbut, sizeof(L2_build_up_task), &sr);
+            }
+            break;
+        }
+
+        case L2_BUILD_LR_TSK: {
+            __mram_ptr L2_build_lr_task* sblrt =
+                (__mram_ptr L2_build_lr_task*)receive_task_start;
+            for (int i = l; i < r; i++) {
+                L2_build_lr(sblrt[i].height, sblrt[i].addr, sblrt[i].val,
+                            sblrt[i].chk);
+            }
             break;
         }
 

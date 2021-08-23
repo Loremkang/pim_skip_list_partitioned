@@ -68,6 +68,7 @@ void init_rand() {
 }
 
 void init_dpus() {
+    printf("\n********** INIT DPUS **********\n");
     init_io_buffer(false);
     set_io_buffer_type(INIT_TSK, EMPTY);
     for (int i = 0; i < nr_of_dpus; i ++) {

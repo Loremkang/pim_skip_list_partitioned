@@ -28,7 +28,13 @@ inline void print_pptr(pptr x, char* str) { // ?? strange bug. need to copy befo
 // } node;
 
 static inline int hh(int64_t key, uint64_t height, uint64_t M) {
-    key = (key % M) * 47 + height;
+    // printf("KEY: %lld\n", key);
+    key = (key % M);
+    // printf("KEY: %lld\n", key);
+    key = (key < 0) ? (key + M) : key;
+    // printf("KEY: %lld\n", key);
+    key = key * 47 + height;
+    // printf("KEY: %lld\n", key);
     return (key * 23 + 17) % M;
 }
 
