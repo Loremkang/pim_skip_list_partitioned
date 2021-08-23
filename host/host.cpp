@@ -61,6 +61,7 @@ int64_t epoch_number;
 int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
 int8_t op_heights[BATCH_SIZE];
+pptr op_addrs[BATCH_SIZE];
 
 void init_rand() {
     srand(time(NULL));

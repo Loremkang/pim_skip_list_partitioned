@@ -77,68 +77,65 @@ void get(int length) {
     key2offset.reserve(length * 2);
 
     init_io_buffer(false);
-    set_io_buffer_type(L3_GET_TSK, L3_GET_REP);
+    set_io_buffer_type(L2_GET_TSK, L2_GET_REP);
     parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
         int l = length * i / nr_of_dpus;
         int r = length * (i + 1) / nr_of_dpus;
         for (int j = l; j < r; j++) {
-            L3_get_task tgt = (L3_get_task){.key = op_keys[j]};
-            push_task(&tgt, sizeof(L3_get_task), sizeof(L3_get_reply), i);
+            L2_get_task tgt = (L2_get_task){.key = op_keys[j]};
+            push_task(&tgt, sizeof(L2_get_task), sizeof(L2_get_task), i);
         }
     });
     ASSERT(exec());
 
-    // apply_to_all_reply(false, [&](task *t) {
-    //     L3_get_reply *tsr = (L3_get_reply *)t->buffer;
-    //     int j = 0;
-    //     assert(key2offset.find(tsr->key, j));
-    //     op_results[j] = tsr->available;
-    //     // printf("%ld %ld\n", tsr->key, tsr->result_key);
-    // });
-
-    // parlay::parallel_for(0, length, [&](size_t i) {
-    //     int j = 0;
-    //     assert(key2offset.find(op_keys[i], j));
-    //     op_results[i] = op_results[j];
-    // });
+    L2_get_reply _;
+    apply_to_all_reply(true, _, [&](L2_get_reply &sgr, int i, int j) {
+        ASSERT(buffer_state == receive_direct);
+        int offset = (int64_t)length * i / nr_of_dpus + j;
+        ASSERT(offset >= 0 &&
+               offset < ((int64_t)length * (i + 1) / nr_of_dpus));
+        op_results[offset] = sgr.available;
+    });
 }
 
 timer predecessor_task_generate("predecessor_task_generate");
+timer predecessor_L3("predecessor_L3");
 timer predecessor_get_result("predecessor_get_result");
 
 void predecessor(int length) {
     epoch_number++;
     // printf("START PREDECESSOR\n");
 
-    predecessor_task_generate.start();
+    predecessor_L3.start();
+    {
+        predecessor_task_generate.start();
+        init_io_buffer(false);
+        set_io_buffer_type(L3_SEARCH_TSK, L3_SEARCH_REP);
+        parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+            int l = (int64_t)length * i / nr_of_dpus;
+            int r = (int64_t)length * (i + 1) / nr_of_dpus;
+            for (int j = l; j < r; j++) {
+                L3_search_task tst = (L3_search_task){.key = op_keys[j]};
+                push_task(&tst, sizeof(L3_search_task), sizeof(L3_search_reply),
+                          i);
+            }
+        });
+        predecessor_task_generate.end();
 
-    init_io_buffer(false);
-    set_io_buffer_type(L3_SEARCH_TSK, L3_SEARCH_REP);
-    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
-        int l = (int64_t)length * i / nr_of_dpus;
-        int r = (int64_t)length * (i + 1) / nr_of_dpus;
-        for (int j = l; j < r; j++) {
-            L3_search_task tst = (L3_search_task){.key = op_keys[j]};
-            push_task(&tst, sizeof(L3_search_task), sizeof(L3_search_reply), i);
-        }
-    });
-    predecessor_task_generate.end();
+        ASSERT(exec());
 
-    ASSERT(exec());
-
-    predecessor_get_result.start();
-
-    // L3_search_reply tsr* = io_buffer[8];
-    L3_search_reply _;
-    apply_to_all_reply(true, _, [&](L3_search_reply &tsr, int i, int j) {
-        ASSERT(buffer_state == receive_direct);
-        int offset = (int64_t)length * i / nr_of_dpus + j;
-        ASSERT(offset >= 0 &&
-               offset < ((int64_t)length * (i + 1) / nr_of_dpus));
-        op_results[offset] = tsr.result_key;
-    });
-
-    predecessor_get_result.end();
+        predecessor_get_result.start();
+        L3_search_reply _;
+        apply_to_all_reply(true, _, [&](L3_search_reply &tsr, int i, int j) {
+            ASSERT(buffer_state == receive_direct);
+            int offset = (int64_t)length * i / nr_of_dpus + j;
+            ASSERT(offset >= 0 &&
+                   offset < ((int64_t)length * (i + 1) / nr_of_dpus));
+            op_addrs[offset] = tsr.addr;
+        });
+        predecessor_get_result.end();
+    }
+    predecessor_L3.end();
 
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld %ld\n", op_keys[i], op_results[i]);

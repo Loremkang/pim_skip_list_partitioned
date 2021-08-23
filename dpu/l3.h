@@ -73,16 +73,16 @@ static inline int64_t L3_search(int64_t key, int i, int record_height,
     }
     // IN_DPU_ASSERT(rightmost != NULL, "L3 search: rightmost error");
     if (rightmost == NULL) {  // pure search task
-        L3_search_reply tsr = (L3_search_reply){//.key = key,
-                                   //.addr = tmp->down,
-                                   .result_key = tmp->key};
-        __mram_ptr L3_search_reply* dst = (__mram_ptr L3_search_reply*)send_task_start;
+        L3_search_reply tsr = (L3_search_reply){.addr = tmp->down};
+        __mram_ptr L3_search_reply *dst =
+            (__mram_ptr L3_search_reply *)send_task_start;
         mram_write(&tsr, &dst[i], sizeof(L3_search_reply));
     }
     return tmp->key;
 }
 
-static inline void print_nodes(int length, mL3ptr *newnode, bool quit, bool lock) {
+static inline void print_nodes(int length, mL3ptr *newnode, bool quit,
+                               bool lock) {
     uint32_t tasklet_id = me();
     if (lock) mutex_lock(L3_lock);
     printf("*** %d ***\n", tasklet_id);
@@ -120,7 +120,7 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
 
     barrier_wait(&L3_barrier);
 
-    __mram_ptr void* maddr = (__mram_ptr void*) newnode_size[tasklet_id];
+    __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
 
     for (int i = 0; i < length; i++) {
         newnode[i] = get_new_L3(keys[i], heights[i], addrs[i], maddr);
@@ -368,7 +368,8 @@ static inline void L3_remove_parallel(int length, int64_t *keys,
 
     for (int i = 0; i < length; i++) {
         if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
-            ht_delete(l3ht, &l3htcnt, hash_to_addr(keys[i], 0, LX_HASHTABLE_SIZE),
+            ht_delete(l3ht, &l3htcnt,
+                      hash_to_addr(keys[i], 0, LX_HASHTABLE_SIZE),
                       (uint32_t)nodes[i]);
         }
     }

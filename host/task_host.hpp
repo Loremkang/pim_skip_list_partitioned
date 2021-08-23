@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <atomic>
 
 #include "common.h"
 #include "timer.hpp"
@@ -28,12 +29,12 @@ enum Buffer_State {
 };
 static Buffer_State buffer_state = idle;
 static int64_t send_buffer_type[MAX_DPU];
-static int64_t send_buffer_offset[MAX_DPU];
-static int64_t send_buffer_count[MAX_DPU];
+static atomic<int64_t> send_buffer_offset[MAX_DPU];
+static atomic<int64_t> send_buffer_count[MAX_DPU];
 
 static int64_t receive_buffer_type[MAX_DPU];
-static int64_t receive_buffer_offset[MAX_DPU];
-static int64_t receive_buffer_count[MAX_DPU];
+static atomic<int64_t> receive_buffer_offset[MAX_DPU];
+static atomic<int64_t> receive_buffer_count[MAX_DPU];
 
 static uint8_t io_buffer[MAX_DPU]
                         [MAX_TASK_BUFFER_SIZE_PER_DPU];  // for broadcast, 0 as
@@ -92,9 +93,10 @@ inline void push_task(void* buffer, size_t length, size_t reply_length,
         ASSERT(send_id >= 0 && send_id < nr_of_dpus);
         receive_id = send_id;
     }
-    memcpy(io_buffer[send_id] + send_buffer_offset[send_id], buffer, length);
+
+    int64_t offset = (send_buffer_offset[send_id] += length) - length;
+    memcpy(io_buffer[send_id] + offset, buffer, length);
     send_buffer_count[send_id]++;
-    send_buffer_offset[send_id] += length;
     if (receive_buffer_type[receive_id] != EMPTY) {
         receive_buffer_count[receive_id]++;
         receive_buffer_offset[receive_id] += reply_length;
@@ -167,19 +169,19 @@ inline bool send_task() {
             ASSERT(false);
             // return false;
         }
-        printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0]);
+        printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0].load());
         memcpy(io_buffer[0], &epoch_number, sizeof(int64_t));
         memcpy(io_buffer[0] + sizeof(int64_t), &send_buffer_type[0],
                sizeof(int64_t));
         memcpy(io_buffer[0] + sizeof(int64_t) * 2, &send_buffer_count[0],
                sizeof(int64_t));
         DPU_ASSERT(dpu_broadcast_to(dpu_set, DPU_MRAM_HEAP_POINTER_NAME, 0,
-                                    io_buffer[0], send_buffer_offset[0],
+                                    io_buffer[0], send_buffer_offset[0].load(),
                                     DPU_XFER_ASYNC));
     } else {
         int64_t max_size = 0;
         for (int i = 0; i < nr_of_dpus; i++) {
-            max_size = max(max_size, send_buffer_offset[i]);
+            max_size = max(max_size, send_buffer_offset[i].load());
             memcpy(io_buffer[i], &epoch_number, sizeof(int64_t));
             memcpy(io_buffer[i] + sizeof(int64_t), &send_buffer_type[i],
                    sizeof(int64_t));
@@ -206,7 +208,7 @@ inline bool receive_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     int64_t max_size = 0;
     if (buffer_state == send_broadcast) {
-        max_size = receive_buffer_offset[1];
+        max_size = receive_buffer_offset[1].load();
         printf("Broadcast Receive: task size=%lu\n", max_size);
         if (receive_buffer_count[1] == 0) {
             DPU_ASSERT(dpu_sync(dpu_set));
@@ -222,7 +224,7 @@ inline bool receive_task() {
         }
     } else {
         for (int i = 0; i < nr_of_dpus; i++) {
-            max_size = max(max_size, receive_buffer_offset[i]);
+            max_size = max(max_size, receive_buffer_offset[i].load());
         }
         printf("Parallel Receive: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t)) {
