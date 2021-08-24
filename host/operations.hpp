@@ -100,6 +100,7 @@ void get(int length) {
 
 timer predecessor_task_generate("predecessor_task_generate");
 timer predecessor_L3("predecessor_L3");
+timer predecessor_L2("predecessor_L2");
 timer predecessor_get_result("predecessor_get_result");
 
 void predecessor(int length) {
@@ -136,6 +137,59 @@ void predecessor(int length) {
         predecessor_get_result.end();
     }
     predecessor_L3.end();
+
+    predecessor_L2.start();
+    {
+        parlay::parallel_for(0, length, [&](size_t i) {
+            op_heights[i] = LOWER_PART_HEIGHT - 1;
+        });
+
+        while (true) {
+            init_io_buffer(false);
+            set_io_buffer_type(L2_GET_NODE_TSK, L2_GET_NODE_REP);
+            parlay::parallel_for(0, length, [&](size_t i) {
+                if (op_heights[i] >= -1 && (i == 0 || !equal_pptr(op_addrs[i - 1], op_addrs[i]))) {
+                    L2_get_node_task sgnt = (L2_get_node_task){
+                        .addr = op_addrs[i], .height = op_heights[i]};
+                    op_taskpos[i] =
+                        push_task(&sgnt, sizeof(L2_get_node_task),
+                                  sizeof(L2_get_node_reply), op_addrs[i].id);
+                    printf("%ld %d\n", i, op_taskpos[i]);
+                } else {
+                    op_taskpos[i] = -1;
+                }
+            });
+
+            if (!exec()) break;
+
+            parlay::parallel_for(0, length, [&](size_t i) {
+                if (op_taskpos[i] != -1) {
+                    L2_get_node_reply *sgnr = (L2_get_node_reply *)get_reply(
+                        op_taskpos[i], sizeof(L2_get_node_reply),
+                        op_addrs[i].id);
+                    int64_t chk = sgnr->chk;
+                    pptr r = sgnr->right;
+                    for (int j = i; j < length; j++) {
+                        if (!equal_pptr(op_addrs[i], op_addrs[j])) {
+                            break;
+                        }
+                        if (op_heights[j] == -1) {
+                            op_results[j] = chk;
+                            op_heights[j]--;
+                        } else {
+                            if (r.id < nr_of_dpus && op_keys[j] >= chk) {
+                                op_addrs[j] = r;
+                            } else {
+                                op_heights[j]--;
+                            }
+                        }
+                    }
+                }
+            });
+            buffer_state = idle;
+        }
+    }
+    predecessor_L2.end();
 
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld %ld\n", op_keys[i], op_results[i]);

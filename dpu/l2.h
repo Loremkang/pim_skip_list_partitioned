@@ -55,8 +55,13 @@ static inline void L2_get(int i, int64_t key) {
 static inline void L2_get_node(int i, pptr addr, int height) {
     IN_DPU_ASSERT(addr.id == DPU_ID, "L2 get node: wrong addr.id");
     mL2ptr nn = (mL2ptr)addr.addr;
-    IN_DPU_ASSERT(height < nn->height, "L2 get node: wrong height");
-    L2_get_node_reply sgnr = (L2_get_node_reply){.chk = nn->chk[height], .right = nn->right[height]};
+    IN_DPU_ASSERT(height >= -1 && height < nn->height, "L2 get node: wrong height");
+    L2_get_node_reply sgnr;
+    if (height == -1) {
+        sgnr = (L2_get_node_reply){.chk = nn->key, .right = null_pptr};
+    } else {
+        sgnr = (L2_get_node_reply){.chk = nn->chk[height], .right = nn->right[height]};
+    }
 
     __mram_ptr L2_get_node_reply* dst = (__mram_ptr L2_get_node_reply*)send_task_start;
     mram_write(&sgnr, &dst[i], sizeof(L2_get_node_reply));

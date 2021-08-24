@@ -126,8 +126,8 @@ static inline int64_t L2_remove_reply_size(int64_t height) {
 }
 
 typedef struct {
-    int64_t height;
     pptr addr;
+    int64_t height;
 } L2_get_node_task;
 
 typedef struct {

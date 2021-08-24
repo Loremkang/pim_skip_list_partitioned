@@ -81,8 +81,8 @@ inline void set_io_buffer_type(int64_t type, int64_t reply_type) {
     }
 }
 
-inline void push_task(void* buffer, size_t length, size_t reply_length,
-                      int send_id) {  // -1 for broadcast
+inline int64_t push_task(void* buffer, size_t length, size_t reply_length,
+                         int send_id) {  // -1 for broadcast
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     int receive_id;
     if (buffer_state == send_broadcast) {
@@ -101,12 +101,27 @@ inline void push_task(void* buffer, size_t length, size_t reply_length,
         receive_buffer_count[receive_id]++;
         receive_buffer_offset[receive_id] += reply_length;
     }
+    return (offset - sizeof(int64_t) * 3) / length;
+}
+
+inline uint8_t* get_reply(int offset, int length,
+                          int receive_id) {  // works only for fixed length
+    ASSERT(buffer_state == receive_broadcast || buffer_state == receive_direct);
+    if (buffer_state == receive_broadcast) {
+        ASSERT(receive_id == -1);
+        receive_id = 1;
+    } else {
+        ASSERT(receive_id >= 0 && receive_id < nr_of_dpus);
+    }
+    ASSERT((*(int64_t*)io_buffer[receive_id]) == 0);
+    uint8_t* tasks = &io_buffer[receive_id][sizeof(int64_t)];
+    return tasks + offset * length;
 }
 
 template <class F, class T>
 inline void apply_to_all_reply(bool parallel, T t, F f) {
     (void)t;
-    assert(buffer_state == receive_broadcast || buffer_state == receive_direct);
+    ASSERT(buffer_state == receive_broadcast || buffer_state == receive_direct);
     auto kernel = [&](size_t i) {
         int64_t task_count = *(int64_t*)(io_buffer[i]);
         ASSERT(task_count >= 0);
@@ -165,9 +180,9 @@ inline bool send_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     if (buffer_state == send_broadcast) {
         if (send_buffer_count[0] == 0) {
-            cout << "Empty Send Task" << endl;
-            ASSERT(false);
-            // return false;
+            cout << "Empty Broadcast Task" << endl;
+            // ASSERT(false);
+            return false;
         }
         printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0].load());
         memcpy(io_buffer[0], &epoch_number, sizeof(int64_t));
@@ -191,8 +206,8 @@ inline bool send_task() {
         printf("Parallel Send: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t) * 3) {
             cout << "Empty Send Task" << endl;
-            ASSERT(false);
-            // return false;
+            // ASSERT(false);
+            return false;
         }
         DPU_FOREACH(dpu_set, dpu, each_dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, &io_buffer[each_dpu][0]));

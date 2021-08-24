@@ -11,6 +11,10 @@ typedef struct pptr {
 
 #define null_pptr ((pptr){.id = (uint32_t)-1, .addr = (uint32_t)-1})
 
+inline bool equal_pptr(pptr a, pptr b) {
+    return (a.id == b.id) && (a.addr == b.addr);
+}
+
 inline void print_pptr(pptr x, char* str) { // ?? strange bug. need to copy before printing.
     pptr y = x;
     printf("%d-%x", y.id, y.addr);

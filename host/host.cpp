@@ -62,6 +62,7 @@ int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
 int8_t op_heights[BATCH_SIZE];
 pptr op_addrs[BATCH_SIZE];
+int32_t op_taskpos[BATCH_SIZE];
 
 void init_rand() {
     srand(time(NULL));
@@ -102,7 +103,10 @@ int main() {
 
     turnon_all_timers(false);
 
-    int BATCH_SIZE_PER_DPU = 500;
+    int BATCH_SIZE_PER_DPU = 5;
+    assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+    return 0;
+
     for (int i = 0; i < 25; i ++) {
         insert_test(BATCH_SIZE_PER_DPU, true);
     }

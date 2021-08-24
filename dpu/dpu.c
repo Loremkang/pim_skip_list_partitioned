@@ -256,6 +256,22 @@ void execute(int l, int r) {
             break;
         }
 
+        case L2_GET_NODE_TSK: {
+
+            __mram_ptr L2_get_node_task* mram_sgnt =
+                (__mram_ptr L2_get_node_task*)receive_task_start;
+
+            seqreader_buffer_t local_cache = seqread_alloc();
+            seqreader_t sr;
+            L2_get_node_task* sgnt = seqread_init(local_cache, mram_sgnt, &sr);
+            
+            for (int i = l; i < r; i++) {
+                L2_get_node(i, sgnt->addr, sgnt->height);
+                sgnt = seqread_get(sgnt, sizeof(L2_get_node_task), &sr);
+            }
+            break;
+        }
+
         case L2_REMOVE_TSK: {
             int length = r - l;
             int64_t* keys = mem_alloc(sizeof(int64_t) * length);

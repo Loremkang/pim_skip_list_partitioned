@@ -8,7 +8,7 @@
 #ifdef KHB_DEBUG
 #define ASSERT(x) assert(x)
 #else
-#define ASSERT(x)  
+#define ASSERT(x) x
 #endif
 
 

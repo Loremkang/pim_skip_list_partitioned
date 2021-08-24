@@ -10,3 +10,4 @@ extern int64_t op_keys[];
 extern int64_t op_results[];
 extern int8_t op_heights[];
 extern pptr op_addrs[];
+extern int32_t op_taskpos[];
