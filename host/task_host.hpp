@@ -40,11 +40,14 @@ static uint8_t io_buffer[MAX_DPU]
                         [MAX_TASK_BUFFER_SIZE_PER_DPU];  // for broadcast, 0 as
                                                          // send, 1 as receive
 
-inline void print_log(bool show_all_dpu = false) {
-    DPU_FOREACH(dpu_set, dpu) {
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
-        if (!show_all_dpu) {
-            break;
+inline void print_log(uint32_t position, bool show_all_dpu = false) {
+    DPU_FOREACH(dpu_set, dpu, each_dpu) {
+        if (show_all_dpu || each_dpu == position) {
+            cout << "DPU ID = " << each_dpu << endl;
+            DPU_ASSERT(dpu_log_read(dpu, stdout));
+            if (!show_all_dpu) {
+                break;
+            }
         }
     }
 }
@@ -101,6 +104,8 @@ inline int64_t push_task(void* buffer, size_t length, size_t reply_length,
         receive_buffer_count[receive_id]++;
         receive_buffer_offset[receive_id] += reply_length;
     }
+    ASSERT(send_buffer_offset[send_id] < MAX_TASK_BUFFER_SIZE_PER_DPU);
+    ASSERT(receive_buffer_offset[send_id] < MAX_TASK_BUFFER_SIZE_PER_DPU);
     return (offset - sizeof(int64_t) * 3) / length;
 }
 
@@ -126,7 +131,8 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
         int64_t task_count = *(int64_t*)(io_buffer[i]);
         ASSERT(task_count >= 0);
         if (task_count > 0) {
-            printf("Variable length buffer\n");
+            cout<<"Variable length buffer"<<endl;
+            // printf("Variable length buffer\n");
             int64_t* offsets = (int64_t*)(&io_buffer[i][sizeof(int64_t) * 2]);
             uint8_t* task_start =
                 io_buffer[i] + sizeof(int64_t) * (task_count + 2);
@@ -161,7 +167,8 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
 //         parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
 //             for (int j = 0; j < (int)send_buffer_task_count[i]; j++) {
 //                 task* t =
-//                     (task*)(&send_buffer[i][0] + send_buffer_offset[i][j]);
+//                     (task*)(&send_buffer[i][0] +
+//                     send_buffer_offset[i][j]);
 //                 f(t);
 //             }
 //         });
@@ -169,7 +176,8 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
 //         for (int i = 0; i < nr_of_dpus; i++) {
 //             for (int j = 0; j < (int)send_buffer_task_count[i]; j++) {
 //                 task* t =
-//                     (task*)(&send_buffer[i][0] + send_buffer_offset[i][j]);
+//                     (task*)(&send_buffer[i][0] +
+//                     send_buffer_offset[i][j]);
 //                 f(t);
 //             }
 //         }
@@ -182,9 +190,11 @@ inline bool send_task() {
         if (send_buffer_count[0] == 0) {
             cout << "Empty Broadcast Task" << endl;
             // ASSERT(false);
+            buffer_state = idle;
             return false;
         }
-        printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0].load());
+        cout<<"Broadcast Send: task size="<<send_buffer_offset[0].load()<<endl;
+        // printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0].load());
         memcpy(io_buffer[0], &epoch_number, sizeof(int64_t));
         memcpy(io_buffer[0] + sizeof(int64_t), &send_buffer_type[0],
                sizeof(int64_t));
@@ -203,10 +213,12 @@ inline bool send_task() {
             memcpy(io_buffer[i] + sizeof(int64_t) * 2, &send_buffer_count[i],
                    sizeof(int64_t));
         }
-        printf("Parallel Send: task size=%lu\n", max_size);
+        cout<<"Parallel Send: task size="<<max_size<<endl;
+        // printf("Parallel Send: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t) * 3) {
             cout << "Empty Send Task" << endl;
             // ASSERT(false);
+            buffer_state = idle;
             return false;
         }
         DPU_FOREACH(dpu_set, dpu, each_dpu) {
@@ -224,7 +236,8 @@ inline bool receive_task() {
     int64_t max_size = 0;
     if (buffer_state == send_broadcast) {
         max_size = receive_buffer_offset[1].load();
-        printf("Broadcast Receive: task size=%lu\n", max_size);
+        cout<<"Broadcast Receive: task size="<<max_size<<endl;
+        // printf("Broadcast Receive: task size=%lu\n", max_size);
         if (receive_buffer_count[1] == 0) {
             DPU_ASSERT(dpu_sync(dpu_set));
             buffer_state = idle;
@@ -241,7 +254,8 @@ inline bool receive_task() {
         for (int i = 0; i < nr_of_dpus; i++) {
             max_size = max(max_size, receive_buffer_offset[i].load());
         }
-        printf("Parallel Receive: task size=%lu\n", max_size);
+        cout<<"Parallel Receive: task size="<<max_size<<endl;
+        // printf("Parallel Receive: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t)) {
             DPU_ASSERT(dpu_sync(dpu_set));
             buffer_state = idle;
@@ -261,8 +275,8 @@ inline bool receive_task() {
     auto kernel = [&](size_t i) {
         int64_t task_count = *(int64_t*)io_buffer[i];
         if (task_count == -1) {  // error
-            print_log();
-            printf("Quit From DPU!\n");
+            print_log(i);
+            cout<<"Quit From DPU!"<<endl;
             exit(-1);
         } else if (task_count > 0) {  // variable length
             ASSERT(max_size > (int64_t)(2 * sizeof(int64_t)));

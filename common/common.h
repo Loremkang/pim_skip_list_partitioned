@@ -16,9 +16,10 @@
 #define STR(x) #x
 
 #define MAX_DPU (NR_DPUS)
-#define MAX_TASK_BUFFER_SIZE_PER_DPU (20 << 10) // 20KB
-#define MAX_TASK_COUNT_PER_DPU (512)
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (100 << 10) // 100KB
+#define MAX_TASK_COUNT_PER_DPU (1024)
 #define MAX_L3_HEIGHT (20)
+#define MAX_THREAD_NUM (100)
 
 /* DPU offsets */
 
@@ -42,6 +43,6 @@
 #define LX_BUFFER_SIZE (12 << 20)
 
 // HASH TABLE 2MB. should be power of 2
-#define LX_HASHTABLE_SIZE ((2 << 20) >> 3)
+#define LX_HASHTABLE_SIZE ((2 << 15) >> 3) // !!!
 
 /* Structure used by both the host and the dpu to communicate information */

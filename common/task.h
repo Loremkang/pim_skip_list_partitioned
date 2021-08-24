@@ -47,6 +47,8 @@
 #define L2_GET_TSK 111
 #define L2_GET_REP 112
 
+#define L2_PRINT_ALL_NODES_TSK 113
+
 // util
 #define INIT_TSK 501
 #define TICK_TSK 502
@@ -102,10 +104,10 @@ typedef L3_insert_task L2_insert_task;
 typedef L3_insert_reply L2_insert_reply;
 
 typedef struct {
-    int64_t height; // positive for right, negative for left
     pptr addr;
-    pptr val;
     int64_t chk;
+    int64_t height; // positive for right, negative for left
+    pptr val;
     // pptr left, right;
 } L2_build_lr_task; // not variable length now
 
@@ -139,6 +141,10 @@ typedef L3_get_task L2_get_task;
 typedef L3_get_reply L2_get_reply;
 
 /* -------------------------- Util -------------------------- */
+
+typedef struct {
+    int64_t nothing;
+} L2_print_all_nodes_task;
 
 typedef struct {
     int64_t nothing;

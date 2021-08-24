@@ -41,6 +41,7 @@ extern "C" {
 #include "test_framework.hpp"
 #include "operations.hpp"
 #include "timer.hpp"
+#include "util.hpp"
 
 
 #ifndef DPU_BINARY
@@ -61,13 +62,10 @@ int64_t epoch_number;
 int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
 int8_t op_heights[BATCH_SIZE];
+int8_t insert_heights[BATCH_SIZE];
 pptr op_addrs[BATCH_SIZE];
+pptr op_addrs2[BATCH_SIZE];
 int32_t op_taskpos[BATCH_SIZE];
-
-void init_rand() {
-    srand(time(NULL));
-    // srand(147);
-}
 
 void init_dpus() {
     printf("\n********** INIT DPUS **********\n");
@@ -89,7 +87,7 @@ int main() {
     timer init_timer("init");
 
     init_timer.start();
-    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=simulator", &dpu_set));
+    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=hw", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
@@ -97,28 +95,34 @@ int main() {
 
     init_dpus();
 
-    init_skiplist(14);
+    init_skiplist(26);
     init_test_framework();
     init_timer.end();
 
     turnon_all_timers(false);
 
-    int BATCH_SIZE_PER_DPU = 5;
-    assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-    return 0;
+    int BATCH_SIZE_PER_DPU = 100;
+    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    // // L2_print_all_nodes();
+    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+    // return 0;
 
-    for (int i = 0; i < 25; i ++) {
-        insert_test(BATCH_SIZE_PER_DPU, true);
+    for (int i = 0; i < 5; i ++) {
+        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     }
 
     turnon_all_timers(true);
 
-    for (int i = 0; i < 50; i ++) {
+    for (int i = 0; i < 10; i ++) {
         // turnon_all_timers(true);
-        insert_test(BATCH_SIZE_PER_DPU, true);
+        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
         // turnon_all_timers(false);
         assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-        remove_test(BATCH_SIZE_PER_DPU, true);
+        // remove_test(BATCH_SIZE_PER_DPU, true);
     }
     print_all_timers();
     // init_timer.print();

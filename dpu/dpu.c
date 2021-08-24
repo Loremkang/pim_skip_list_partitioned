@@ -45,6 +45,7 @@
 /* -------------- Storage -------------- */
 
 BARRIER_INIT(init_barrier, NR_TASKLETS);
+BARRIER_INIT(end_barrier, NR_TASKLETS);
 
 // __host volatile int host_barrier;
 
@@ -144,7 +145,6 @@ void execute(int l, int r) {
 
             newnode_size[tasklet_id] = 0;
             for (int i = 0; i < length; i++) {
-                if (i >= length) break;
                 keys[i] = tit->key;
                 addrs[i] = tit->addr;
                 heights[i] = tit->height;
@@ -221,10 +221,11 @@ void execute(int l, int r) {
                 keys[i] = sit->key;
                 addrs[i] = sit->addr;
                 heights[i] = sit->height;
-                newnode_size[tasklet_id] += L2_node_size(heights[i]);
+                newnode_size[tasklet_id] += L2_node_size(
+                    (heights[i] > LOWER_PART_HEIGHT) ? LOWER_PART_HEIGHT
+                                                     : heights[i]);
                 sit = seqread_get(sit, sizeof(L2_insert_task), &sr);
-                IN_DPU_ASSERT(heights[i] > 0 && heights[i] < LOWER_PART_HEIGHT,
-                              "execute: invalid height\n");
+                IN_DPU_ASSERT(heights[i] > 0, "execute: invalid height\n");
             }
             L2_insert_parallel(l, length, keys, heights, addrs, newnode_size);
             break;
@@ -234,7 +235,7 @@ void execute(int l, int r) {
             __mram_ptr L2_build_up_task* mram_tasks =
                 (__mram_ptr L2_build_up_task*)receive_task_start;
             mram_tasks += l;
-            
+
             seqreader_buffer_t local_cache = seqread_alloc();
             seqreader_t sr;
             L2_build_up_task* sbut = seqread_init(local_cache, mram_tasks, &sr);
@@ -247,24 +248,30 @@ void execute(int l, int r) {
         }
 
         case L2_BUILD_LR_TSK: {
-            __mram_ptr L2_build_lr_task* sblrt =
+            __mram_ptr L2_build_lr_task* mram_sblrt =
                 (__mram_ptr L2_build_lr_task*)receive_task_start;
-            for (int i = l; i < r; i++) {
-                L2_build_lr(sblrt[i].height, sblrt[i].addr, sblrt[i].val,
-                            sblrt[i].chk);
+            mram_sblrt += l;
+
+            seqreader_buffer_t local_cache = seqread_alloc();
+            seqreader_t sr;
+            L2_build_lr_task* sblrt = seqread_init(local_cache, mram_sblrt, &sr);
+
+            for (int i = 0; i < length; i++) {
+                L2_build_lr(sblrt->height, sblrt->addr, sblrt->val, sblrt->chk);
+                sblrt = seqread_get(sblrt, sizeof(L2_build_lr_task), &sr);
             }
             break;
         }
 
         case L2_GET_NODE_TSK: {
-
             __mram_ptr L2_get_node_task* mram_sgnt =
                 (__mram_ptr L2_get_node_task*)receive_task_start;
+            mram_sgnt += l;
 
             seqreader_buffer_t local_cache = seqread_alloc();
             seqreader_t sr;
             L2_get_node_task* sgnt = seqread_init(local_cache, mram_sgnt, &sr);
-            
+
             for (int i = l; i < r; i++) {
                 L2_get_node(i, sgnt->addr, sgnt->height);
                 sgnt = seqread_get(sgnt, sizeof(L2_get_node_task), &sr);
@@ -291,6 +298,13 @@ void execute(int l, int r) {
                 (__mram_ptr L2_get_task*)receive_task_start;
             for (int i = l; i < r; i++) {
                 L2_get(sgt[i].key, i);
+            }
+            break;
+        }
+
+        case L2_PRINT_ALL_NODES_TSK: {
+            if (tasklet_id == 0) {
+                L2_print_all_nodes();
             }
             break;
         }
@@ -345,6 +359,8 @@ int main() {
     uint32_t rt = dpu_task_count * (tasklet_id + 1) / NR_TASKLETS;
 
     execute(lft, rt);
+
+    // barrier_wait(&end_barrier);
     if (tasklet_id == 0) {
         printf("epoch=%lld l3cnt=%d l3htcnt=%d\n", dpu_epoch_number, l3cnt,
                l3htcnt);

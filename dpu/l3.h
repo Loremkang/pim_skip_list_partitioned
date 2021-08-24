@@ -230,13 +230,23 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
                 left_newnode[ht]->left[ht] =
                     (pptr){.id = DPU_ID, .addr = (uint32_t)right_newnode_l[ht]};
             } else {
+                // if (right_predecessor_l[ht]->right[ht].id == INVALID_DPU_ID) {
+                //     // printf("%x\n", right_predecessor_l[ht]->right[ht].addr);
+                //     // printf("%d %d\n", tasklet_id, l);
+                //     // printf("%x %x\n", right_predecessor_l[ht], left_predecessor[ht]);
+                //     // print_pptr(right_predecessor_l[ht]->right[ht], "\n");
+                //     // print_pptr(left_predecessor[ht]->right[ht], "\n");
+                //     for (int i = 0; i < NR_TASKLETS; i ++) {
+                //         printf("%d %d\n", i, max_height_shared[i]);
+                //     }
+                // }
                 IN_DPU_ASSERT(
                     right_predecessor_l[ht]->right[ht].id != INVALID_DPU_ID,
-                    "L3insertparallel: build l_newnode <-> right_successor "
+                    "L3 insert parallel: build l_newnode <-> right_successor "
                     "id error");
                 IN_DPU_ASSERT(
                     right_predecessor_l[ht]->right[ht].addr != INVALID_DPU_ADDR,
-                    "L3insertparallel: build l_newnode <-> right_successor "
+                    "L3 insert parallel: build l_newnode <-> right_successor "
                     "addr error");
                 right_newnode_l[ht]->right[ht] =
                     (pptr){.id = OLD_NODES_DPU_ID,

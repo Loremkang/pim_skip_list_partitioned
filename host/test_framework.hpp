@@ -5,21 +5,10 @@
 #include <set>
 #include "operations.hpp"
 #include "timer.hpp"
+#include "util.hpp"
 using namespace std;
 
 // const int VALUE_LIMIT = ;
-
-int64_t randint64() {
-    uint64_t v = rand();
-    v = (v << 31) + rand();
-    v = (v << 3) + (rand() & 3);
-    // printf("*%llu %llu %d\n", v, 1ull << 63, v >= (1ull << 63));
-    if (v >= (1ull << 63)) {
-        return v - (1ull << 63);
-    } else {
-        return v - (1ull << 63);
-    }
-}
 
 extern bool print_debug;
 
@@ -80,6 +69,8 @@ timer predecessor_timer("predecessor");
 bool predecessor_test(int length, bool check_result) {
     parlay::parallel_for(0, length,
                          [&](size_t i) { op_keys[i] = randint64(); });
+
+    sort(op_keys, op_keys + length);
     // sort(op_keys, op_keys + length);
     cout << "\n*** Start Predecessor Test ***" << endl;
     predecessor_timer.start();
@@ -169,6 +160,17 @@ void L3_sancheck() {
     L3_sancheck_task tst;
     push_task(&tst, sizeof(L3_sancheck_task), 0, -1);
     ASSERT(!exec());
-    print_log();
+    print_log(0);
     cout << endl << "\n*** End L3 Sancheck ***" << endl;
+}
+
+void L2_print_all_nodes() {
+    cout << "\n*** Start L2 Print All Nodes ***" << endl;
+    init_io_buffer(true);
+    set_io_buffer_type(L2_PRINT_ALL_NODES_TSK, EMPTY);
+    L2_print_all_nodes_task spant;
+    push_task(&spant, sizeof(L2_print_all_nodes_task), 0, -1);
+    ASSERT(!exec());
+    print_log(0, true);
+    cout << endl << "\n*** End L3 Print All Nodes ***" << endl;
 }
