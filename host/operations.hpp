@@ -103,6 +103,21 @@ void get(int length) {
     });
 }
 
+template <class F> // [invalid, valid] [l, r)
+inline int binary_search_local(int l, int r, F f) {
+    ASSERT(l >= 0 && r >= 0 && r > l);
+    int mid = (l + r) >> 1;
+    while (r - l > 1) {
+        if (f(mid)) {
+            l = mid;
+        } else {
+            r = mid;
+        }
+        mid = (l + r) >> 1;
+    }
+    return l;
+}
+
 timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
 timer predecessor_L3_get_result("predecessor_L3_get_result");
@@ -170,15 +185,27 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
             init_io_buffer(false);
             set_io_buffer_type(L2_GET_NODE_TSK, L2_GET_NODE_REP);
 
-            auto new_task = parlay::tabulate(length, [](int i) -> bool {
-                return op_heights[i] >= -1 &&
-                       not_equal_pptr(op_addrs[i - 1], op_addrs[i]);
+            auto task_start = parlay::tabulate(length, [](int i) -> bool {
+                return i >= 0 && op_heights[i] >= -1 && not_equal_pptr(op_addrs[i - 1], op_addrs[i]);
             });
-            if (op_heights[0] >= -1) {
-                new_task[0] = true;
-            }
-            auto idx = parlay::pack_index(new_task);
+            task_start[0] = (op_heights[0] >= -1);
+
+            auto ll = parlay::pack_index(task_start);
+
+            // auto new_idx = parlay::delayed_tabulate(idx.size(), [&](int i) -> bool {
+            //     return op_heights[idx[i]] >= -1;
+            // });
+            // auto ll_idx = parlay::pack_index(new_idx);
+            // auto rr_idx = parlay::map(ll_idx, [](int x) -> int {return (x + 1);});
+            // auto ll = parlay::map(ll_idx, [&](int x) -> int {return idx[x];});
+            // auto rr = parlay::map(ll_idx.cut, [&](int x) -> int {return idx[x + 1];});
             predecessor_L2_pack.end();
+            // idx.push_back(length);
+            // auto rr = parlay::map(rr_idx, [&](int x) -> int {return idx[x];});
+            // auto ll = parlay::filter(idx, [&](int i) {
+            //     return op_heights[i] >= -1;
+            // });
+            // auto rr = parlay::tabulate()
             // auto target = parlay::map(idx, [&](int x) {
             //     return op_addrs[x].id;
             // });
@@ -187,8 +214,8 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
             //     op_taskpos[i] = -1;
             // });
 
-            parlay::parallel_for(0, idx.size(), [&](size_t x) {
-                int i = idx[x];
+            parlay::parallel_for(0, ll.size(), [&](size_t x) {
+                int i = ll[x];
                 L2_get_node_task sgnt = (L2_get_node_task){
                     .addr = op_addrs[i], .height = op_heights[i]};
                 op_taskpos[i] =
@@ -205,16 +232,22 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
 
             // parlay::parallel_for(0, length, [&](size_t i) {
             predecessor_L2_get_result.start();
-            idx.push_back(length);
-            parlay::parallel_for(0, idx.size() - 1, [&](size_t x) {
-                int ll = idx[x];
-                int rr = idx[x + 1];
+            parlay::parallel_for(0, ll.size(), [&](size_t i) {
+                int loop_l = ll[i];
+                int loop_r = (i == ll.size() - 1) ? length : ll[i + 1];
                 L2_get_node_reply *sgnr = (L2_get_node_reply *)get_reply(
-                    op_taskpos[ll], sizeof(L2_get_node_reply), op_addrs[ll].id);
+                    op_taskpos[loop_l], sizeof(L2_get_node_reply), op_addrs[loop_l].id);
                 int64_t chk = sgnr->chk;
                 pptr r = sgnr->right;
-                for (int j = ll; j < rr; j++) {
-                    if (op_heights[j] == -2) break;
+
+                // auto tmpkeys = parlay::make_slice(keys + loop_l, keys + loop_r);
+                // auto divider = parlay::find_if(tmpkeys, [](int64_t v) {return v >= chk;})
+                // auto tmpheights = parlay::make_slice(op_heights + )
+                // int mid = divider - (keys + loop_l);
+                int validr = binary_search_local(loop_l, loop_r, [&](int i) {return (op_heights[i] != -2);}) + 1;
+
+                parlay::parallel_for(loop_l, validr, [&](size_t j) {
+                    ASSERT(op_heights[j] >= -1);
                     if (op_heights[j] == -1) {
                         op_results[j] = chk;
                         op_heights[j]--;
@@ -230,8 +263,8 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
                                 // }
                                 ASSERT(ht >= 0);
                                 if (ht < heights[j]) {
-                                    paths[j][ht] = op_addrs[ll];
-                                    if (j < length - 1 &&
+                                    paths[j][ht] = op_addrs[loop_l];
+                                    if ((int)j < length - 1 &&
                                         &paths[j][ht] >= &paths[j + 1][0]) {
                                         cout << j << ' ' << ht << endl;
                                         cout << paths[j] << ' ' << &paths[j][ht]
@@ -245,7 +278,7 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
                             op_heights[j]--;
                         }
                     }
-                }
+                }, 1000);
             });
             predecessor_L2_get_result.end();
             buffer_state = idle;
