@@ -144,9 +144,10 @@ void remove_test(int length, bool check_result) {
     remove_timer.end();
 
     if (check_result) {
-        deduplication(op_keys, length);
-        for (int i = 0; i < length; i++) {
-            golden_L3.erase(op_keys[i]);
+        auto dedup_keys = deduplication(op_keys, length);
+        int l = dedup_keys.size();
+        for (int i = 0; i < l; i++) {
+            golden_L3.erase(dedup_keys[i]);
         }
     }
 

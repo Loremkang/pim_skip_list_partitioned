@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <string>
 #include <libcuckoo/cuckoohash_map.hh>
 #include "task_host.hpp"
 #include "timer.hpp"
@@ -326,7 +327,9 @@ timer insert_L3("insert_L3");
 timer insert_up("insert_up");
 timer insert_lr("insert_lr");
 timer insert_lr_taskgen("insert_lr_taskgen");
+timer insert_lr_prepare("insert_lr_prepare");
 timer insert_lr_execute("insert_lr_execute");
+timer* insert_lr_taskgen_details[LOWER_PART_HEIGHT];
 
 pptr insert_path_addrs_buf[BATCH_SIZE * 2];
 pptr insert_path_rights_buf[BATCH_SIZE * 2];
@@ -485,7 +488,7 @@ void insert(int length) {
     printf("\n**** BUILD L2 LR ****\n");
     insert_lr.start();
     {
-        insert_lr_taskgen.start();
+        insert_lr_prepare.start();
         const int BLOCK = 128;
 
         int node_count[LOWER_PART_HEIGHT + 1];
@@ -554,14 +557,20 @@ void insert(int length) {
                 }
             }
         });
+        insert_lr_prepare.end();
 
+        insert_lr_taskgen.start();
         init_io_buffer(false);
         set_io_buffer_type(L2_BUILD_LR_TSK, EMPTY);
 
         bool print = false;
         for (int ht = 0; ht < LOWER_PART_HEIGHT; ht++) {
+            if (insert_lr_taskgen_details[ht] == NULL) {
+                insert_lr_taskgen_details[ht] = new timer(string("insert_lr_taskgen_details_") + std::to_string(ht));
+                insert_lr_taskgen_details[ht]->reset();
+            } 
+            insert_lr_taskgen_details[ht]->start();
             parlay::parallel_for(0, node_count[ht], [&](size_t j) {
-                // for (int j = 0; j < node_count[ht]; j ++) {
                 int id = node_id[ht][j];
                 int l = (j == 0) ? -1 : node_id[ht][j - 1];
                 int r =
@@ -569,8 +578,8 @@ void insert(int length) {
                 ASSERT(insert_heights[id] > ht);
                 ASSERT(l == -1 || insert_heights[l] > ht);
                 ASSERT(r == -1 || insert_heights[r] > ht);
-                if (l == -1 || !equal_pptr(insert_path_addrs[id][ht],
-                                           insert_path_addrs[l][ht])) {
+                if (l == -1 || not_equal_pptr(insert_path_addrs[id][ht],
+                                              insert_path_addrs[l][ht])) {
                     // no new node on the left,
                     // build right of the
                     // predecessor, build left
@@ -611,8 +620,8 @@ void insert(int length) {
                                sblt.val.id, sblt.val.addr);
                     }
                 }
-                if (r == -1 || !equal_pptr(insert_path_addrs[id][ht],
-                                           insert_path_addrs[r][ht])) {
+                if (r == -1 || not_equal_pptr(insert_path_addrs[id][ht],
+                                              insert_path_addrs[r][ht])) {
                     // ASSERT(r == -1);
                     L2_build_lr_task sblt =
                         (L2_build_lr_task){.addr = op_addrs[id],
@@ -654,8 +663,8 @@ void insert(int length) {
                                sblt.val.id, sblt.val.addr);
                     }
                 }
-                // }
             });
+            insert_lr_taskgen_details[ht]->end();
 
             // for (int j = 0; j < node_count[i]; j ++) {
             //     printf("%d ", node_id[i][j]);
