@@ -7,6 +7,10 @@
 #include "timer.hpp"
 #include "host.hpp"
 #include "util.hpp"
+#include <parlay/primitives.h>
+#include <parlay/range.h>
+#include <parlay/sequence.h>
+
 using namespace std;
 
 extern bool print_debug;
@@ -99,35 +103,43 @@ void get(int length) {
     });
 }
 
-timer predecessor_task_generate("predecessor_task_generate");
+timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
+timer predecessor_L3_get_result("predecessor_L3_get_result");
 timer predecessor_L2("predecessor_L2");
-timer predecessor_get_result("predecessor_get_result");
+timer predecessor_L2_execute("predecessor_L2_execute");
+timer predecessor_L2_task_generate("predecessor_L2_task_generate");
+timer predecessor_L2_get_result("predecessor_L2_get_result");
 
-void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
-                 pptr **rights = NULL, int64_t **chks = NULL) {
+void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
+                 pptr **rights = NULL, int64_t **chks = NULL,
+                 int64_t *keys = NULL) {
+    if (keys == NULL) {
+        keys = op_keys;
+    }
+
     epoch_number++;
     // printf("START PREDECESSOR\n");
 
     predecessor_L3.start();
     {
-        predecessor_task_generate.start();
+        predecessor_L3_task_generate.start();
         init_io_buffer(false);
         set_io_buffer_type(L3_SEARCH_TSK, L3_SEARCH_REP);
         parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
             int l = (int64_t)length * i / nr_of_dpus;
             int r = (int64_t)length * (i + 1) / nr_of_dpus;
             for (int j = l; j < r; j++) {
-                L3_search_task tst = (L3_search_task){.key = op_keys[j]};
+                L3_search_task tst = (L3_search_task){.key = keys[j]};
                 push_task(&tst, sizeof(L3_search_task), sizeof(L3_search_reply),
                           i);
             }
         });
-        predecessor_task_generate.end();
+        predecessor_L3_task_generate.end();
 
         ASSERT(exec());
 
-        predecessor_get_result.start();
+        predecessor_L3_get_result.start();
         L3_search_reply _;
         apply_to_all_reply(true, _, [&](L3_search_reply &tsr, int i, int j) {
             ASSERT(buffer_state == receive_direct);
@@ -136,7 +148,7 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                    offset < ((int64_t)length * (i + 1) / nr_of_dpus));
             op_addrs[offset] = tsr.addr;
         });
-        predecessor_get_result.end();
+        predecessor_L3_get_result.end();
     }
     predecessor_L3.end();
 
@@ -148,11 +160,14 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
             op_heights[i] = LOWER_PART_HEIGHT - 1;
         });
 
+        int cnt = 0;
         while (true) {
+            cnt++;
+            predecessor_L2_task_generate.start();
             init_io_buffer(false);
             set_io_buffer_type(L2_GET_NODE_TSK, L2_GET_NODE_REP);
-            // parlay::parallel_for(0, length, [&](size_t i) {
-            for (int i = 0; i < length; i ++) {
+            parlay::parallel_for(0, length, [&](size_t i) {
+                // for (int i = 0; i < length; i ++) {
                 if (op_heights[i] >= -1 &&
                     (i == 0 || !equal_pptr(op_addrs[i - 1], op_addrs[i]))) {
                     L2_get_node_task sgnt = (L2_get_node_task){
@@ -161,16 +176,17 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                         push_task(&sgnt, sizeof(L2_get_node_task),
                                   sizeof(L2_get_node_reply), op_addrs[i].id);
                     // if (op_heights[i] == 11) {
-                    //     printf("%d %ld %d %d-%x %d\n", i, op_keys[i],
-                    //            op_heights[i], op_addrs[i].id, op_addrs[i].addr,
-                    //            op_taskpos[i]);
+                    //     printf("%d %ld %d %d-%x %d\n", i, keys[i],
+                    //            op_heights[i], op_addrs[i].id,
+                    //            op_addrs[i].addr, op_taskpos[i]);
                     // }
                 } else {
                     op_taskpos[i] = -1;
                 }
-            }
+                // }
+            });
+            predecessor_L2_task_generate.end();
             // cout<<"*"<<endl;
-            // });
 
             // for (int i = 0; i < length; i ++) {
             //     for (int j = i + 1; j < length; j ++) {
@@ -185,11 +201,15 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
             //     }
             // }
 
+            predecessor_L2_execute.start();
             if (!exec()) break;
+            predecessor_L2_execute.end();
             // cout<<"**"<<endl;
 
             // parlay::parallel_for(0, length, [&](size_t i) {
-            for (int i = 0; i < length; i++) {
+            predecessor_L2_get_result.start();
+            parlay::parallel_for(0, length, [&](size_t i) {
+                // for (int i = 0; i < length; i++) {
                 if (op_taskpos[i] != -1) {
                     L2_get_node_reply *sgnr = (L2_get_node_reply *)get_reply(
                         op_taskpos[i], sizeof(L2_get_node_reply),
@@ -197,9 +217,9 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                     int64_t chk = sgnr->chk;
                     pptr r = sgnr->right;
                     // if (op_heights[i] == 11) {
-                    //     printf("%d %ld %d %d-%x %ld %d-%x\n", i, op_keys[i],
-                    //            op_heights[i], op_addrs[i].id, op_addrs[i].addr,
-                    //            chk, r.id, r.addr);
+                    //     printf("%d %ld %d %d-%x %ld %d-%x\n", i, keys[i],
+                    //            op_heights[i], op_addrs[i].id,
+                    //            op_addrs[i].addr, chk, r.id, r.addr);
                     // }
                     for (int j = i; j < length; j++) {
                         if ((int)i != j && op_taskpos[j] != -1) {
@@ -218,8 +238,7 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                             op_results[j] = chk;
                             op_heights[j]--;
                         } else {
-                            if (r.id < (uint32_t)nr_of_dpus &&
-                                op_keys[j] >= chk) {
+                            if (r.id < (uint32_t)nr_of_dpus && keys[j] >= chk) {
                                 op_addrs[j] = r;
                             } else {
                                 if (heights != NULL) {
@@ -231,7 +250,8 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                                     ASSERT(ht >= 0);
                                     if (ht < heights[j]) {
                                         paths[j][ht] = op_addrs[i];
-                                        if (&paths[j][ht] >= &paths[j + 1][0]) {
+                                        if (j < length - 1 &&
+                                            &paths[j][ht] >= &paths[j + 1][0]) {
                                             cout << j << ' ' << ht << endl;
                                             cout << paths[j] << ' '
                                                  << &paths[j][ht] << ' '
@@ -247,36 +267,54 @@ void predecessor(int length, int8_t *heights = NULL, pptr **paths = NULL,
                         }
                     }
                 }
-            }
-            // });
+            });
+            predecessor_L2_get_result.end();
             buffer_state = idle;
         }
+        cout << "Rounds: " << cnt << endl;
     }
     predecessor_L2.end();
 
     // for (int i = 0; i < length; i ++) {
-    //     printf("%ld %ld\n", op_keys[i], op_results[i]);
+    //     printf("%ld %ld\n", keys[i], op_results[i]);
     // }
 }
 
-void deduplication(int64_t *arr, int &length) {  // assume sorted
-    sort(arr, arr + length);
-    int l = 1;
-    for (int i = 1; i < length; i++) {
-        if (arr[i] != arr[i - 1]) {
-            arr[l++] = arr[i];
-        }
-    }
-    length = l;
+auto deduplication(int64_t *arr, int &length) {  // assume sorted
+    auto seq = parlay::make_slice(arr, arr + length);
+    parlay::sort_inplace(seq);
+
+    auto dup = parlay::tabulate(
+        length, [&](int i) -> bool { return i == 0 || seq[i] != seq[i - 1]; });
+    auto packed = parlay::pack(seq, dup);
+    length = packed.size();
+    return packed;
+
+    // sort(arr, arr + length);
+    // auto seq = parlay::sequence(arr, arr + length);
+    // parlay::sort_inplace(seq);
+    // parlay::sort_inplace();
+    // parlay::sort_inplace
+    // arr = seq.data();
+    // int l = 1;
+    // for (int i = 1; i < length; i++) {
+    //     if (arr[i] != arr[i - 1]) {
+    //         arr[l++] = arr[i];
+    //     }
+    // }
+    // length = l;
 }
 
 int insert_offset_buffer[BATCH_SIZE * 2];
 timer insert_init("insert_init");
 timer insert_predecessor("insert_predecessor");
 timer insert_L2("insert_L2");
+timer insert_L2_taskgen("insert_L2_taskgen");
 timer insert_L3("insert_L3");
 timer insert_up("insert_up");
 timer insert_lr("insert_lr");
+timer insert_lr_taskgen("insert_lr_taskgen");
+timer insert_lr_execute("insert_lr_execute");
 
 pptr insert_path_addrs_buf[BATCH_SIZE * 2];
 pptr insert_path_rights_buf[BATCH_SIZE * 2];
@@ -289,84 +327,65 @@ int64_t *insert_path_chks[BATCH_SIZE];
 void insert(int length) {
     // printf("\n********** INIT SKIP LIST **********\n");
 
+    insert_init.start();
+
     printf("\n**** INIT HEIGHT ****\n");
     epoch_number++;
-    deduplication(op_keys, length);
-    // printf("\n*** Insert: L3 insert\n");
+    auto keys = deduplication(op_keys, length);
 
-    int cnt[LOWER_PART_HEIGHT + 10];
-    memset(cnt, 0, sizeof(cnt));
-
-    insert_init.start();
-    // parlay::parallel_for(0, length, [&](size_t i) {
-    for (int i = 0; i < length; i++) {
-        int h = 1;
-        // int64_t t = parallel_randheightint64(parlay::worker_id());
-        int32_t t = rand();
-        while ((t & 1) == 0) {
-            h++;
-            t >>= 1;
-        }
+    parlay::parallel_for(0, length, [&](size_t i) {
+        int32_t t = randint64(parlay::worker_id());
+        t = t & (-t);
+        int h = __builtin_ctz(t) + 1;
         h = min(h, maxheight);
         insert_heights[i] = h;
-        // printf("%ld %d\n", op_keys[i], h);
-        cnt[h - 1]++;
-    }
+    });
 
-    {
-        insert_path_addrs[0] = insert_path_addrs_buf;
-        insert_path_rights[0] = insert_path_rights_buf;
-        insert_path_chks[0] = insert_path_chks_buf;
-        for (int i = 1; i <= length; i++) {
-            insert_path_addrs[i] =
-                insert_path_addrs[i - 1] + insert_heights[i - 1];
-            insert_path_rights[i] =
-                insert_path_rights[i - 1] + insert_heights[i - 1];
-            insert_path_chks[i] =
-                insert_path_chks[i - 1] + insert_heights[i - 1];
-        }
-        ASSERT(insert_path_addrs[length] <
-               insert_path_addrs_buf + BATCH_SIZE * 2);
-        ASSERT(insert_path_rights[length] <
-               insert_path_rights_buf + BATCH_SIZE * 2);
-        ASSERT(insert_path_chks[length] <
-               insert_path_chks_buf + BATCH_SIZE * 2);
-    }
+    parlay::slice ins_heights_slice =
+        parlay::make_slice(insert_heights, insert_heights + length);
+
+    auto height_prefix_sum_pair = parlay::scan(ins_heights_slice);
+    auto height_total = height_prefix_sum_pair.second;
+    auto height_prefix_sum = height_prefix_sum_pair.first;
+
+    auto insert_path_addrs = parlay::map(height_prefix_sum, [&](int32_t x) {
+        return insert_path_addrs_buf + x;
+    });
+    auto insert_path_rights = parlay::map(height_prefix_sum, [&](int32_t x) {
+        return insert_path_rights_buf + x;
+    });
+    auto insert_path_chks = parlay::map(
+        height_prefix_sum, [&](int32_t x) { return insert_path_chks_buf + x; });
+
+    ASSERT(height_total < BATCH_SIZE * 2);
 
     insert_init.end();
 
     printf("\n**** INSERT PREDECESSOR ****\n");
     insert_predecessor.start();
     {
-        predecessor(length, insert_heights, insert_path_addrs,
-                    insert_path_rights, insert_path_chks);
-        // for (int i = 0; i < length; i++) {
-        //     for (int ht = 0; ht < insert_heights[i]; ht++) {
-        //         printf("%ld ", insert_path_chks[i][ht]);
-        //         print_pptr(insert_path_addrs[i][ht], " ");
-        //         print_pptr(insert_path_rights[i][ht], "\n");
-        //     }
-        //     printf("\n");
-        // }
-        // exit(-1);
+        predecessor(length, insert_heights, insert_path_addrs.data(),
+                    insert_path_rights.data(), insert_path_chks.data(),
+                    keys.data());
     }
     insert_predecessor.end();
 
     printf("\n**** INSERT L2 ****\n");
     insert_L2.start();
     {
+        insert_L2_taskgen.start();
         // insert_task_generate.start();
         init_io_buffer(false);
         set_io_buffer_type(L2_INSERT_TSK, L2_INSERT_REP);
 
         parlay::parallel_for(0, length, [&](size_t i) {
-            int target = hash_to_dpu(op_keys[i], 0, nr_of_dpus);
-            L2_insert_task sit = (L2_insert_task){.key = op_keys[i],
-                                                  .addr = null_pptr,
-                                                  .height = insert_heights[i]};
+            int target = hash_to_dpu(keys[i], 0, nr_of_dpus);
+            L2_insert_task sit = (L2_insert_task){
+                .key = keys[i], .addr = null_pptr, .height = insert_heights[i]};
             op_taskpos[i] = push_task(&sit, sizeof(L2_insert_task),
                                       sizeof(L2_insert_reply), target);
         });
+        insert_L2_taskgen.end();
 
         ASSERT(exec());
 
@@ -374,16 +393,14 @@ void insert(int length) {
             if (op_taskpos[i] != -1) {
                 L2_insert_reply *sir = (L2_insert_reply *)get_reply(
                     op_taskpos[i], sizeof(L2_insert_reply),
-                    hash_to_dpu(op_keys[i], 0, nr_of_dpus));
+                    hash_to_dpu(keys[i], 0, nr_of_dpus));
                 op_addrs[i] = sir->addr;
                 op_taskpos[i] = -1;
             }
         });
         buffer_state = idle;
-        // insert_task_generate.end();
     }
     insert_L2.end();
-
 
     printf("\n**** INSERT L3 ****\n");
     insert_L3.start();
@@ -406,9 +423,9 @@ void insert(int length) {
 
         for (int t = 0; t < cnt; t++) {
             int i = L3_id[t];
-            // printf("T3: %d %d %ld\n", t, i, op_keys[i]);
+            // printf("T3: %d %d %ld\n", t, i, keys[i]);
             L3_insert_task tit = (L3_insert_task){
-                .key = op_keys[i],
+                .key = keys[i],
                 .addr = op_addrs[i],
                 .height = insert_heights[i] - LOWER_PART_HEIGHT};
             op_taskpos[i] = push_task(&tit, sizeof(L3_insert_task),
@@ -441,7 +458,7 @@ void insert(int length) {
 
         parlay::parallel_for(0, length, [&](size_t i) {
             if (insert_heights[i] > LOWER_PART_HEIGHT) {
-                int target = hash_to_dpu(op_keys[i], 0, nr_of_dpus);
+                int target = hash_to_dpu(keys[i], 0, nr_of_dpus);
                 L2_build_up_task sbut =
                     (L2_build_up_task){.addr = op_addrs[i], .up = op_addrs2[i]};
                 push_task(&sbut, sizeof(L2_build_up_task), 0, target);
@@ -456,6 +473,7 @@ void insert(int length) {
     printf("\n**** BUILD L2 LR ****\n");
     insert_lr.start();
     {
+        insert_lr_taskgen.start();
         const int BLOCK = 128;
 
         int node_count[LOWER_PART_HEIGHT + 1];
@@ -548,7 +566,7 @@ void insert(int length) {
                     // ASSERT(l == -1);
                     L2_build_lr_task sblt =
                         (L2_build_lr_task){.addr = insert_path_addrs[id][ht],
-                                           .chk = op_keys[id],
+                                           .chk = keys[id],
                                            .height = ht,
                                            .val = op_addrs[id]};
                     push_task(&sblt, sizeof(L2_build_lr_task), 0, sblt.addr.id);
@@ -614,7 +632,7 @@ void insert(int length) {
                 } else {
                     L2_build_lr_task sblt =
                         (L2_build_lr_task){.addr = op_addrs[id],
-                                           .chk = op_keys[r],
+                                           .chk = keys[r],
                                            .height = ht,
                                            .val = op_addrs[r]};
                     push_task(&sblt, sizeof(L2_build_lr_task), 0, sblt.addr.id);
@@ -633,7 +651,10 @@ void insert(int length) {
             // printf("\n");
         }
 
+        insert_lr_taskgen.end();
+        insert_lr_execute.start();
         ASSERT(!exec());
+        insert_lr_execute.end();
     }
     insert_lr.end();
     // cout<<"FINISHED!"<<endl;
@@ -655,12 +676,12 @@ timer remove_task_generate("remove_task_generate");
 void remove(int length) {
     remove_task_generate.start();
     epoch_number++;
-    deduplication(op_keys, length);
+    auto keys = deduplication(op_keys, length);
     init_io_buffer(true);
     set_io_buffer_type(L3_REMOVE_TSK, EMPTY);
 
     for (int i = 0; i < length; i++) {
-        L3_remove_task trt = (L3_remove_task){.key = op_keys[i]};
+        L3_remove_task trt = (L3_remove_task){.key = keys[i]};
         push_task(&trt, sizeof(L3_remove_task), 0, -1);
     }
     remove_task_generate.end();

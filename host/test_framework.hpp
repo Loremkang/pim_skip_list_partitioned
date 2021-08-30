@@ -25,14 +25,14 @@ timer get_timer("get");
 
 bool get_test(int length, bool check_result) {
     for (int i = 0; i < length; i++) {
-        if (rand() & 1) {
+        if (randint64(parlay::worker_id()) & 1) {
             auto it = golden_L3.begin();
-            int rnd = (randint64() % (golden_L3.size() - 2)) +
+            int rnd = (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
                       1;  // don't ask -INF or INF
             advance(it, rnd);
             op_keys[i] = *it;
         } else {
-            op_keys[i] = randint64();
+            op_keys[i] = randint64(parlay::worker_id());
         }
     }
 
@@ -68,7 +68,7 @@ timer predecessor_timer("predecessor");
 
 bool predecessor_test(int length, bool check_result) {
     parlay::parallel_for(0, length,
-                         [&](size_t i) { op_keys[i] = randint64(); });
+                         [&](size_t i) { op_keys[i] = randint64(parlay::worker_id()); });
 
     sort(op_keys, op_keys + length);
     // sort(op_keys, op_keys + length);
@@ -104,12 +104,12 @@ bool insert_test(int length, bool check_result) {
     cout << "\n*** Start Insert Test ***" << endl;
     if (check_result) {
         for (int i = 0; i < length; i++) {
-            op_keys[i] = randint64();
+            op_keys[i] = randint64(parlay::worker_id());
             golden_L3.insert(op_keys[i]);
         }
     } else {
         for (int i = 0; i < length; i++) {
-            op_keys[i] = randint64();
+            op_keys[i] = randint64(parlay::worker_id());
         }
     }
 
@@ -128,14 +128,14 @@ void remove_test(int length, bool check_result) {
     }
     cout << "\n*** Start Remove Test ***" << endl;
     for (int i = 0; i < length; i++) {
-        if (rand() & 1) {
+        if (randint64(parlay::worker_id()) & 1) {
             auto it = golden_L3.begin();
-            int rnd = (randint64() % (golden_L3.size() - 2)) +
+            int rnd = (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
                       1;  // don't ask -INF or INF
             advance(it, rnd);
             op_keys[i] = *it;
         } else {
-            op_keys[i] = randint64();
+            op_keys[i] = randint64(parlay::worker_id());
         }
     }
 

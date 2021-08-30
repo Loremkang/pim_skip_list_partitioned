@@ -61,8 +61,8 @@ int64_t epoch_number;
 
 int64_t op_keys[BATCH_SIZE];
 int64_t op_results[BATCH_SIZE];
-int8_t op_heights[BATCH_SIZE];
-int8_t insert_heights[BATCH_SIZE];
+int32_t op_heights[BATCH_SIZE];
+int32_t insert_heights[BATCH_SIZE];
 pptr op_addrs[BATCH_SIZE];
 pptr op_addrs2[BATCH_SIZE];
 int32_t op_taskpos[BATCH_SIZE];
@@ -77,6 +77,17 @@ void init_dpus() {
     }
     ASSERT(!exec());
 }
+
+// void randint64_test() {
+//     int bins[NR_DPUS];
+//     memset(bins, 0, sizeof(bins));
+//     for (int i = 0; i < 1000000; i ++) {
+//         bins[hash_to_dpu(randint64(parlay::worker_id()), 0, nr_of_dpus)] ++;
+//     }
+//     for (int i = 0; i < nr_of_dpus; i ++) {
+//         printf("%d\n", bins[i]);
+//     }
+// }
 
 /**
  * @brief Main of the Host Application.
@@ -93,6 +104,9 @@ int main() {
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
     printf("Allocated %d DPU(s)\n", nr_of_dpus);
 
+    // randint64_test();
+    // return 0;
+
     init_dpus();
 
     init_skiplist(26);
@@ -101,7 +115,7 @@ int main() {
 
     turnon_all_timers(false);
 
-    int BATCH_SIZE_PER_DPU = 100;
+    int BATCH_SIZE_PER_DPU = 500;
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
@@ -121,9 +135,10 @@ int main() {
         // turnon_all_timers(true);
         insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
         // turnon_all_timers(false);
-        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+        // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
         // remove_test(BATCH_SIZE_PER_DPU, true);
     }
+    assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
     print_all_timers();
     // init_timer.print();
     // insert_timer.print();
