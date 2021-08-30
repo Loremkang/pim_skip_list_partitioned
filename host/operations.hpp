@@ -110,6 +110,7 @@ timer predecessor_L2("predecessor_L2");
 timer predecessor_L2_execute("predecessor_L2_execute");
 timer predecessor_L2_task_generate("predecessor_L2_task_generate");
 timer predecessor_L2_get_result("predecessor_L2_get_result");
+timer predecessor_L2_pack("predecessor_L2_pack");
 
 void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
                  pptr **rights = NULL, int64_t **chks = NULL,
@@ -164,42 +165,38 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
         while (true) {
             cnt++;
             predecessor_L2_task_generate.start();
+
+            predecessor_L2_pack.start();
             init_io_buffer(false);
             set_io_buffer_type(L2_GET_NODE_TSK, L2_GET_NODE_REP);
-            parlay::parallel_for(0, length, [&](size_t i) {
-                // for (int i = 0; i < length; i ++) {
-                if (op_heights[i] >= -1 &&
-                    (i == 0 || !equal_pptr(op_addrs[i - 1], op_addrs[i]))) {
-                    L2_get_node_task sgnt = (L2_get_node_task){
-                        .addr = op_addrs[i], .height = op_heights[i]};
-                    op_taskpos[i] =
-                        push_task(&sgnt, sizeof(L2_get_node_task),
-                                  sizeof(L2_get_node_reply), op_addrs[i].id);
-                    // if (op_heights[i] == 11) {
-                    //     printf("%d %ld %d %d-%x %d\n", i, keys[i],
-                    //            op_heights[i], op_addrs[i].id,
-                    //            op_addrs[i].addr, op_taskpos[i]);
-                    // }
-                } else {
-                    op_taskpos[i] = -1;
-                }
-                // }
-            });
-            predecessor_L2_task_generate.end();
-            // cout<<"*"<<endl;
 
-            // for (int i = 0; i < length; i ++) {
-            //     for (int j = i + 1; j < length; j ++) {
-            //         if (!(op_taskpos[i] == -1 || op_taskpos[i] !=
-            //         op_taskpos[j] || op_addrs[i].id != op_addrs[j].id)) {
-            //             cout<<i<<' '<<j<<endl;
-            //             cout<<op_taskpos[i]<<' '<<op_taskpos[j]<<endl;
-            //             print_pptr(op_addrs[i], "\n");
-            //             print_pptr(op_addrs[j], "\n");
-            //             exit(-1);
-            //         }
-            //     }
-            // }
+            auto new_task = parlay::tabulate(length, [](int i) -> bool {
+                return op_heights[i] >= -1 &&
+                       not_equal_pptr(op_addrs[i - 1], op_addrs[i]);
+            });
+            if (op_heights[0] >= -1) {
+                new_task[0] = true;
+            }
+            auto idx = parlay::pack_index(new_task);
+            predecessor_L2_pack.end();
+            // auto target = parlay::map(idx, [&](int x) {
+            //     return op_addrs[x].id;
+            // });
+
+            // parlay::parallel_for(0, length, [&](size_t i) {
+            //     op_taskpos[i] = -1;
+            // });
+
+            parlay::parallel_for(0, idx.size(), [&](size_t x) {
+                int i = idx[x];
+                L2_get_node_task sgnt = (L2_get_node_task){
+                    .addr = op_addrs[i], .height = op_heights[i]};
+                op_taskpos[i] =
+                    push_task(&sgnt, sizeof(L2_get_node_task),
+                                sizeof(L2_get_node_reply), op_addrs[i].id);
+            });
+
+            predecessor_L2_task_generate.end();
 
             predecessor_L2_execute.start();
             if (!exec()) break;
@@ -208,62 +205,44 @@ void predecessor(int length, int32_t *heights = NULL, pptr **paths = NULL,
 
             // parlay::parallel_for(0, length, [&](size_t i) {
             predecessor_L2_get_result.start();
-            parlay::parallel_for(0, length, [&](size_t i) {
-                // for (int i = 0; i < length; i++) {
-                if (op_taskpos[i] != -1) {
-                    L2_get_node_reply *sgnr = (L2_get_node_reply *)get_reply(
-                        op_taskpos[i], sizeof(L2_get_node_reply),
-                        op_addrs[i].id);
-                    int64_t chk = sgnr->chk;
-                    pptr r = sgnr->right;
-                    // if (op_heights[i] == 11) {
-                    //     printf("%d %ld %d %d-%x %ld %d-%x\n", i, keys[i],
-                    //            op_heights[i], op_addrs[i].id,
-                    //            op_addrs[i].addr, chk, r.id, r.addr);
-                    // }
-                    for (int j = i; j < length; j++) {
-                        if ((int)i != j && op_taskpos[j] != -1) {
-                            break;
-                        }
-                        if (op_heights[j] == -2) {
-                            break;
-                        }
-                        // if (!equal_pptr(op_addrs[i], op_addrs[j])) {
-                        //     printf("**%ld %d %d-%x %d-%x\n", i, j,
-                        //            op_addrs[i].id, op_addrs[i].addr,
-                        //            op_addrs[j].id, op_addrs[j].addr);
-                        //     break;
-                        // }
-                        if (op_heights[j] == -1) {
-                            op_results[j] = chk;
-                            op_heights[j]--;
+            idx.push_back(length);
+            parlay::parallel_for(0, idx.size() - 1, [&](size_t x) {
+                int ll = idx[x];
+                int rr = idx[x + 1];
+                L2_get_node_reply *sgnr = (L2_get_node_reply *)get_reply(
+                    op_taskpos[ll], sizeof(L2_get_node_reply), op_addrs[ll].id);
+                int64_t chk = sgnr->chk;
+                pptr r = sgnr->right;
+                for (int j = ll; j < rr; j++) {
+                    if (op_heights[j] == -2) break;
+                    if (op_heights[j] == -1) {
+                        op_results[j] = chk;
+                        op_heights[j]--;
+                    } else {
+                        if (r.id != INVALID_DPU_ID && keys[j] >= chk) {
+                            op_addrs[j] = r;
                         } else {
-                            if (r.id < (uint32_t)nr_of_dpus && keys[j] >= chk) {
-                                op_addrs[j] = r;
-                            } else {
-                                if (heights != NULL) {
-                                    int ht = op_heights[j];
-                                    if (ht < 0) {
-                                        cout << ht << endl;
+                            if (heights != NULL) {
+                                int ht = op_heights[j];
+                                // if (ht < 0) {
+                                //     cout << ht << endl;
+                                //     exit(-1);
+                                // }
+                                ASSERT(ht >= 0);
+                                if (ht < heights[j]) {
+                                    paths[j][ht] = op_addrs[ll];
+                                    if (j < length - 1 &&
+                                        &paths[j][ht] >= &paths[j + 1][0]) {
+                                        cout << j << ' ' << ht << endl;
+                                        cout << paths[j] << ' ' << &paths[j][ht]
+                                             << ' ' << paths[j + 1] << endl;
                                         exit(-1);
                                     }
-                                    ASSERT(ht >= 0);
-                                    if (ht < heights[j]) {
-                                        paths[j][ht] = op_addrs[i];
-                                        if (j < length - 1 &&
-                                            &paths[j][ht] >= &paths[j + 1][0]) {
-                                            cout << j << ' ' << ht << endl;
-                                            cout << paths[j] << ' '
-                                                 << &paths[j][ht] << ' '
-                                                 << paths[j + 1] << endl;
-                                            exit(-1);
-                                        }
-                                        rights[j][ht] = r;
-                                        chks[j][ht] = chk;
-                                    }
+                                    rights[j][ht] = r;
+                                    chks[j][ht] = chk;
                                 }
-                                op_heights[j]--;
                             }
+                            op_heights[j]--;
                         }
                     }
                 }

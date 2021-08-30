@@ -11,6 +11,10 @@ typedef struct pptr {
 
 #define null_pptr ((pptr){.id = (uint32_t)-1, .addr = (uint32_t)-1})
 
+inline bool not_equal_pptr(pptr a, pptr b) {
+    return (a.id != b.id) || (a.addr != b.addr);
+}
+
 inline bool equal_pptr(pptr a, pptr b) {
     return (a.id == b.id) && (a.addr == b.addr);
 }
