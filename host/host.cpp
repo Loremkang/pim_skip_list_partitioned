@@ -135,10 +135,10 @@ int main() {
         // turnon_all_timers(true);
         insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
         // turnon_all_timers(false);
-        // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
         // remove_test(BATCH_SIZE_PER_DPU, true);
     }
-    assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
     print_all_timers();
     // init_timer.print();
     // insert_timer.print();
