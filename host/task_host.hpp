@@ -27,14 +27,17 @@ enum Buffer_State {
     receive_direct,
     receive_broadcast
 };
-static Buffer_State buffer_state = idle;
-static int64_t send_buffer_type[MAX_DPU];
-static atomic<int64_t> send_buffer_offset[MAX_DPU];
-static atomic<int64_t> send_buffer_count[MAX_DPU];
 
-static int64_t receive_buffer_type[MAX_DPU];
-static atomic<int64_t> receive_buffer_offset[MAX_DPU];
-static atomic<int64_t> receive_buffer_count[MAX_DPU];
+const int AFSP = 3; // ATOMIC_FALSE_SHARING_PADDING
+
+static Buffer_State buffer_state = idle;
+static int64_t send_buffer_type[MAX_DPU << AFSP];
+static atomic<int64_t> send_buffer_offset[MAX_DPU << AFSP];
+static atomic<int64_t> send_buffer_count[MAX_DPU << AFSP];
+
+static int64_t receive_buffer_type[MAX_DPU << AFSP];
+static atomic<int64_t> receive_buffer_offset[MAX_DPU << AFSP];
+static atomic<int64_t> receive_buffer_count[MAX_DPU << AFSP];
 
 static uint8_t io_buffer[MAX_DPU]
                         [MAX_TASK_BUFFER_SIZE_PER_DPU];  // for broadcast, 0 as
@@ -57,16 +60,16 @@ inline void init_io_buffer(bool broadcast) {
     if (broadcast) {
         buffer_state = send_broadcast;
         send_buffer_count[0] = 0;
-        receive_buffer_count[1] = 0;
+        receive_buffer_count[1 << AFSP] = 0;
         send_buffer_offset[0] = sizeof(int64_t) * 3;
-        receive_buffer_offset[1] = sizeof(int64_t);
+        receive_buffer_offset[1 << AFSP] = sizeof(int64_t);
     } else {
         buffer_state = send_direct;
         memset(send_buffer_count, 0, sizeof(send_buffer_count));
         memset(receive_buffer_count, 0, sizeof(receive_buffer_count));
         for (int i = 0; i < MAX_DPU; i++) {
-            send_buffer_offset[i] = sizeof(int64_t) * 3;
-            receive_buffer_offset[i] = sizeof(int64_t);
+            send_buffer_offset[i << AFSP] = sizeof(int64_t) * 3;
+            receive_buffer_offset[i << AFSP] = sizeof(int64_t);
         }
     }
 }
@@ -75,11 +78,11 @@ inline void set_io_buffer_type(int64_t type, int64_t reply_type) {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     if (buffer_state == send_broadcast) {
         send_buffer_type[0] = type;
-        receive_buffer_type[1] = reply_type;
+        receive_buffer_type[1 << AFSP] = reply_type;
     } else {
         for (int i = 0; i < nr_of_dpus; i++) {
-            send_buffer_type[i] = type;
-            receive_buffer_type[i] = reply_type;
+            send_buffer_type[i << AFSP] = type;
+            receive_buffer_type[i << AFSP] = reply_type;
         }
     }
 }
@@ -97,17 +100,17 @@ inline int64_t push_task(void* buffer, size_t length, size_t reply_length,
         receive_id = send_id;
     }
 
-    int64_t offset = (send_buffer_offset[send_id] += length) - length;
+    int64_t offset = (send_buffer_offset[send_id << AFSP] += length) - length;
     memcpy(io_buffer[send_id] + offset, buffer, length);
-    send_buffer_count[send_id]++;
-    if (receive_buffer_type[receive_id] != EMPTY) {
-        receive_buffer_count[receive_id]++;
-        receive_buffer_offset[receive_id] += reply_length;
+    send_buffer_count[send_id << AFSP]++;
+    if (receive_buffer_type[receive_id << AFSP] != EMPTY) {
+        receive_buffer_count[receive_id << AFSP]++;
+        receive_buffer_offset[receive_id << AFSP] += reply_length;
     }
     // ASSERT(send_buffer_offset[send_id].is_lock_free());
     // ASSERT(send_buffer_count[send_id].is_lock_free());
-    ASSERT(send_buffer_offset[send_id] < MAX_TASK_BUFFER_SIZE_PER_DPU);
-    ASSERT(receive_buffer_offset[send_id] < MAX_TASK_BUFFER_SIZE_PER_DPU);
+    ASSERT(send_buffer_offset[send_id << AFSP] < MAX_TASK_BUFFER_SIZE_PER_DPU);
+    ASSERT(receive_buffer_offset[send_id << AFSP] < MAX_TASK_BUFFER_SIZE_PER_DPU);
     return (offset - sizeof(int64_t) * 3) / length;
 }
 
@@ -144,7 +147,7 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
             }
         } else {
             T* tasks = (T*)(&io_buffer[i][sizeof(int64_t)]);
-            for (int j = 0; j < receive_buffer_count[i]; j++) {
+            for (int j = 0; j < receive_buffer_count[i << AFSP]; j++) {
                 f(tasks[j], i, j);
             }
         }
@@ -162,29 +165,6 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
     }
     buffer_state = idle;
 }
-
-// template <class F, class T>
-// inline void apply_to_all_request(bool parallel, F f, T t) {
-//     if (parallel) {
-//         parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
-//             for (int j = 0; j < (int)send_buffer_task_count[i]; j++) {
-//                 task* t =
-//                     (task*)(&send_buffer[i][0] +
-//                     send_buffer_offset[i][j]);
-//                 f(t);
-//             }
-//         });
-//     } else {
-//         for (int i = 0; i < nr_of_dpus; i++) {
-//             for (int j = 0; j < (int)send_buffer_task_count[i]; j++) {
-//                 task* t =
-//                     (task*)(&send_buffer[i][0] +
-//                     send_buffer_offset[i][j]);
-//                 f(t);
-//             }
-//         }
-//     }
-// }
 
 inline bool send_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
@@ -208,11 +188,11 @@ inline bool send_task() {
     } else {
         int64_t max_size = 0;
         for (int i = 0; i < nr_of_dpus; i++) {
-            max_size = max(max_size, send_buffer_offset[i].load());
+            max_size = max(max_size, send_buffer_offset[i << AFSP].load());
             memcpy(io_buffer[i], &epoch_number, sizeof(int64_t));
-            memcpy(io_buffer[i] + sizeof(int64_t), &send_buffer_type[i],
+            memcpy(io_buffer[i] + sizeof(int64_t), &send_buffer_type[i << AFSP],
                    sizeof(int64_t));
-            memcpy(io_buffer[i] + sizeof(int64_t) * 2, &send_buffer_count[i],
+            memcpy(io_buffer[i] + sizeof(int64_t) * 2, &send_buffer_count[i << AFSP],
                    sizeof(int64_t));
         }
         // cout<<"Parallel Send: task size="<<max_size<<endl;
@@ -237,10 +217,10 @@ inline bool receive_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     int64_t max_size = 0;
     if (buffer_state == send_broadcast) {
-        max_size = receive_buffer_offset[1].load();
+        max_size = receive_buffer_offset[1 << AFSP].load();
         // cout<<"Broadcast Receive: task size="<<max_size<<endl;
         // printf("Broadcast Receive: task size=%lu\n", max_size);
-        if (receive_buffer_count[1] == 0) {
+        if (receive_buffer_count[1 << AFSP] == 0) {
             DPU_ASSERT(dpu_sync(dpu_set));
             buffer_state = idle;
             return false;
@@ -254,7 +234,7 @@ inline bool receive_task() {
         }
     } else {
         for (int i = 0; i < nr_of_dpus; i++) {
-            max_size = max(max_size, receive_buffer_offset[i].load());
+            max_size = max(max_size, receive_buffer_offset[i << AFSP].load());
         }
         // cout<<"Parallel Receive: task size="<<max_size<<endl;
         // printf("Parallel Receive: task size=%lu\n", max_size);

@@ -707,7 +707,7 @@ void remove(int length) {
     }
     remove_task_generate.end();
 
-    ASSERT(!exec());
+    ASSERT(exec());
     // buffer_state = idle;
     // if (print_debug) {
     //     print_log();
