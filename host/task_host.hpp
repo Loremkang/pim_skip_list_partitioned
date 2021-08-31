@@ -175,7 +175,7 @@ inline bool send_task() {
             buffer_state = idle;
             return false;
         }
-        // cout<<"Broadcast Send: task size="<<send_buffer_offset[0].load()<<endl;
+        cout<<"Broadcast Send: task size="<<send_buffer_offset[0].load()<<endl;
         // printf("Broadcast Send: task size=%lu\n", send_buffer_offset[0].load());
         memcpy(io_buffer[0], &epoch_number, sizeof(int64_t));
         memcpy(io_buffer[0] + sizeof(int64_t), &send_buffer_type[0],
@@ -195,7 +195,7 @@ inline bool send_task() {
             memcpy(io_buffer[i] + sizeof(int64_t) * 2, &send_buffer_count[i << AFSP],
                    sizeof(int64_t));
         }
-        // cout<<"Parallel Send: task size="<<max_size<<endl;
+        cout<<"Parallel Send: task size="<<max_size<<endl;
         // printf("Parallel Send: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t) * 3) {
             cout << "Empty Send Task" << endl;
@@ -218,7 +218,7 @@ inline bool receive_task() {
     int64_t max_size = 0;
     if (buffer_state == send_broadcast) {
         max_size = receive_buffer_offset[1 << AFSP].load();
-        // cout<<"Broadcast Receive: task size="<<max_size<<endl;
+        cout<<"Broadcast Receive: task size="<<max_size<<endl;
         // printf("Broadcast Receive: task size=%lu\n", max_size);
         if (receive_buffer_count[1 << AFSP] == 0) {
             DPU_ASSERT(dpu_sync(dpu_set));
@@ -236,7 +236,7 @@ inline bool receive_task() {
         for (int i = 0; i < nr_of_dpus; i++) {
             max_size = max(max_size, receive_buffer_offset[i << AFSP].load());
         }
-        // cout<<"Parallel Receive: task size="<<max_size<<endl;
+        cout<<"Parallel Receive: task size="<<max_size<<endl;
         // printf("Parallel Receive: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t)) {
             DPU_ASSERT(dpu_sync(dpu_set));
@@ -307,18 +307,18 @@ inline bool exec() {
     // memset(receive_buffer_task_count, 0,
     // sizeof(receive_buffer_task_count));
 
-    // exec_timer.start();
-    // send_task_timer.start();
+    exec_timer.start();
+    send_task_timer.start();
     if (send_task()) {
-        // DPU_ASSERT(dpu_sync(dpu_set));
-        // send_task_timer.end();
-        // execute_timer.start();
-        DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
-        // execute_timer.end();
-        // receive_task_timer.start();
+        DPU_ASSERT(dpu_sync(dpu_set));
+        send_task_timer.end();
+        execute_timer.start();
+        DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
+        execute_timer.end();
+        receive_task_timer.start();
         bool ret = receive_task();
-        // receive_task_timer.end();
-        // exec_timer.end();
+        receive_task_timer.end();
+        exec_timer.end();
         return ret;
     } else {
         return false;

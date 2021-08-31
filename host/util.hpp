@@ -35,3 +35,33 @@ inline int64_t randint64(int thread_id) {
     tmp = parlay::hash64(tmp);
     return tmp;
 }
+
+template <class F>  // [valid, invalid]
+inline int binary_search_local_l(int l, int r, F f) {
+    // ASSERT(l >= -1 && r >= 0 && r > l);
+    int mid = (l + r) >> 1;
+    while (r - l > 1) {
+        if (f(mid)) {
+            l = mid;
+        } else {
+            r = mid;
+        }
+        mid = (l + r) >> 1;
+    }
+    return l;
+}
+
+template <class F>  // [invalid, valid]
+inline int binary_search_local_r(int l, int r, F f) {
+    // ASSERT(l >= -1 && r >= 0 && r > l);
+    int mid = (l + r) >> 1;
+    while (r - l > 1) {
+        if (f(mid)) {
+            r = mid;
+        } else {
+            l = mid;
+        }
+        mid = (l + r) >> 1;
+    }
+    return r;
+}

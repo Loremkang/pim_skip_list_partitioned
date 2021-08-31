@@ -14,9 +14,13 @@ extern bool print_debug;
 
 static set<int64_t> golden_L3;
 
+extern int64_t key_split[];
 void init_test_framework() {
     epoch_number = 0;
     golden_L3.clear();
+    for (int i = 0; i < nr_of_dpus; i ++) {
+        golden_L3.insert(key_split[i]);
+    }
     golden_L3.insert(LLONG_MIN);
     golden_L3.insert(LLONG_MAX);
 }
@@ -69,8 +73,8 @@ timer predecessor_timer("predecessor");
 bool predecessor_test(int length, bool check_result) {
     parlay::parallel_for(0, length,
                          [&](size_t i) { op_keys[i] = randint64(parlay::worker_id()); });
+    // memset(op_results, 0, sizeof(int64_t) * BATCH_SIZE);
 
-    sort(op_keys, op_keys + length);
     // sort(op_keys, op_keys + length);
     cout << "\n*** Start Predecessor Test ***" << endl;
     predecessor_timer.start();
@@ -88,8 +92,8 @@ bool predecessor_test(int length, bool check_result) {
             set<int64_t>::iterator it = golden_L3.upper_bound(op_keys[i]);
             it--;
             if (op_results[i] != *it) {
-                cout << op_keys[i] << ' ' << op_results[i] << ' ' << *it
-                     << endl;
+                cout << i << ' ' << op_keys[i] << ' ' << op_results[i] << ' '
+                     << *it << endl;
                 return false;
             }
         }
@@ -130,8 +134,9 @@ void remove_test(int length, bool check_result) {
     for (int i = 0; i < length; i++) {
         if (randint64(parlay::worker_id()) & 1) {
             auto it = golden_L3.begin();
-            int rnd = (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
-                      1;  // don't ask -INF or INF
+            int rnd =
+                (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
+                1;  // don't ask -INF or INF
             advance(it, rnd);
             op_keys[i] = *it;
         } else {
@@ -161,7 +166,7 @@ void L3_sancheck() {
     L3_sancheck_task tst;
     push_task(&tst, sizeof(L3_sancheck_task), 0, -1);
     ASSERT(!exec());
-    print_log(0);
+    print_log(0, true);
     cout << endl << "\n*** End L3 Sancheck ***" << endl;
 }
 

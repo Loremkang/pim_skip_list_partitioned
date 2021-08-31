@@ -40,7 +40,6 @@
 #include "common.h"
 #include "task_dpu.h"
 #include "l3.h"
-#include "l2.h"
 
 /* -------------- Storage -------------- */
 
@@ -70,13 +69,6 @@ __mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
 __host int l3htcnt = 0;
 __mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
 __host int l3cnt = 8;
-
-// L2
-__mram_noinit ht_slot l2ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
-__host int l2htcnt = 0;
-__mram_noinit uint8_t l2buffer[LX_BUFFER_SIZE];
-__host int l2cnt = 8;
-
 
 __host mL3ptr root;
 
@@ -178,9 +170,14 @@ void execute(int l, int r) {
         case L3_SEARCH_TSK: {
             __mram_ptr L3_search_task* tst =
                 (__mram_ptr L3_search_task*)receive_task_start;
+            int64_t* val = mem_alloc(sizeof(int64_t) * length);
             for (int i = l; i < r; i++) {
-                L3_search(tst[i].key, i, 0, NULL);
+                val[i] = L3_search(tst[i].key, 0, NULL);
+                // int64_t res = L3_search(tst[i].key, 0, NULL);
             }
+            __mram_ptr L3_search_reply* dst =
+                (__mram_ptr L3_search_reply*)send_task_start;
+            mram_write(val, &dst[l], sizeof(int64_t) * length);
             break;
         }
 
@@ -189,122 +186,6 @@ void execute(int l, int r) {
                 (__mram_ptr L3_get_task*)receive_task_start;
             for (int i = l; i < r; i++) {
                 L3_get(tgt[i].key, i);
-            }
-            break;
-        }
-
-        case L2_INIT_TSK: {
-            if (tasklet_id == 0) {
-                L2_init_task sit;
-                mram_read(receive_task_start, &sit, sizeof(L2_init_task));
-                L2_init(&sit);
-            }
-            break;
-        }
-
-        case L2_INSERT_TSK: {
-            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            pptr* addrs = mem_alloc(sizeof(pptr) * length);
-            int8_t* heights = mem_alloc(sizeof(int8_t) * length);
-
-            __mram_ptr L2_insert_task* mram_sit =
-                (__mram_ptr L2_insert_task*)receive_task_start;
-            mram_sit += l;
-
-            seqreader_buffer_t local_cache = seqread_alloc();
-            seqreader_t sr;
-            L2_insert_task* sit = seqread_init(local_cache, mram_sit, &sr);
-
-            newnode_size[tasklet_id] = 0;
-            for (int i = 0; i < length; i++) {
-                if (i >= length) break;
-                keys[i] = sit->key;
-                addrs[i] = sit->addr;
-                heights[i] = sit->height;
-                newnode_size[tasklet_id] += L2_node_size(
-                    (heights[i] > LOWER_PART_HEIGHT) ? LOWER_PART_HEIGHT
-                                                     : heights[i]);
-                sit = seqread_get(sit, sizeof(L2_insert_task), &sr);
-                IN_DPU_ASSERT(heights[i] > 0, "execute: invalid height\n");
-            }
-            L2_insert_parallel(l, length, keys, heights, addrs, newnode_size);
-            break;
-        }
-
-        case L2_BUILD_UP_TSK: {
-            __mram_ptr L2_build_up_task* mram_tasks =
-                (__mram_ptr L2_build_up_task*)receive_task_start;
-            mram_tasks += l;
-
-            seqreader_buffer_t local_cache = seqread_alloc();
-            seqreader_t sr;
-            L2_build_up_task* sbut = seqread_init(local_cache, mram_tasks, &sr);
-
-            for (int i = 0; i < length; i++) {
-                L2_build_up(sbut->addr, sbut->up);
-                sbut = seqread_get(sbut, sizeof(L2_build_up_task), &sr);
-            }
-            break;
-        }
-
-        case L2_BUILD_LR_TSK: {
-            __mram_ptr L2_build_lr_task* mram_sblrt =
-                (__mram_ptr L2_build_lr_task*)receive_task_start;
-            mram_sblrt += l;
-
-            seqreader_buffer_t local_cache = seqread_alloc();
-            seqreader_t sr;
-            L2_build_lr_task* sblrt = seqread_init(local_cache, mram_sblrt, &sr);
-
-            for (int i = 0; i < length; i++) {
-                L2_build_lr(sblrt->height, sblrt->addr, sblrt->val, sblrt->chk);
-                sblrt = seqread_get(sblrt, sizeof(L2_build_lr_task), &sr);
-            }
-            break;
-        }
-
-        case L2_GET_NODE_TSK: {
-            __mram_ptr L2_get_node_task* mram_sgnt =
-                (__mram_ptr L2_get_node_task*)receive_task_start;
-            mram_sgnt += l;
-
-            seqreader_buffer_t local_cache = seqread_alloc();
-            seqreader_t sr;
-            L2_get_node_task* sgnt = seqread_init(local_cache, mram_sgnt, &sr);
-
-            for (int i = l; i < r; i++) {
-                L2_get_node(i, sgnt->addr, sgnt->height);
-                sgnt = seqread_get(sgnt, sizeof(L2_get_node_task), &sr);
-            }
-            break;
-        }
-
-        case L2_REMOVE_TSK: {
-            int length = r - l;
-            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            __mram_ptr L2_remove_task* trt =
-                (__mram_ptr L2_remove_task*)receive_task_start;
-            trt += l;
-            mram_read(trt, keys, sizeof(int64_t) * length);
-
-            int32_t* oldnode_size = bufferA_shared;
-            int32_t* oldnode_count = bufferB_shared;
-            L2_remove_parallel(length, keys, oldnode_size, oldnode_count);
-            break;
-        }
-
-        case L2_GET_TSK: {
-            __mram_ptr L2_get_task* sgt =
-                (__mram_ptr L2_get_task*)receive_task_start;
-            for (int i = l; i < r; i++) {
-                L2_get(sgt[i].key, i);
-            }
-            break;
-        }
-
-        case L2_PRINT_ALL_NODES_TSK: {
-            if (tasklet_id == 0) {
-                L2_print_all_nodes();
             }
             break;
         }

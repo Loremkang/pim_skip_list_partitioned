@@ -23,28 +23,7 @@ extern int l3htcnt;
 extern __mram_ptr uint8_t l3buffer[];
 extern int l3cnt;
 
-// L2
-MUTEX_INIT(get_new_L2_lock);
-extern __mram_ptr ht_slot l2ht[];  // must be 8 bytes aligned. 0 as null.
-extern int l2htcnt;
-extern __mram_ptr uint8_t l2buffer[];
-extern int l2cnt;
-
 extern mL3ptr root;
-
-// __mram_noinit uint8_t l2buffer[LX_BUFFER_SIZE];
-// int l2cnt;
-
-// __mram_noinit uint8_t l1buffer[LX_BUFFER_SIZE];
-// int l1cnt;
-
-// __mram_noinit uint8_t l0buffer[LX_BUFFER_SIZE];
-// int l0cnt;
-
-// __mram_ptr uint8_t* l2ht[LX_HASHTABLE_SIZE];
-// __mram_ptr uint8_t* l1ht[LX_HASHTABLE_SIZE];
-// __mram_ptr uint8_t* l0ht[LX_HASHTABLE_SIZE];
-
 
 __host bool storage_inited = false;
 static inline void storage_init() {
@@ -55,7 +34,6 @@ static inline void storage_init() {
     ht_slot hs = null_ht_slot;
     for (int i = 0; i < LX_HASHTABLE_SIZE; i++) {
         l3ht[i] = hs;
-        l2ht[i] = hs;
     }
     // L3_gc_init();
 }
@@ -166,46 +144,6 @@ static inline mL3ptr get_new_L3(int64_t key, int height, pptr down, __mram_ptr v
     L3node* nn = init_L3(key, height, down, buffer, maddr);
     mram_write((void*)nn, maddr, size);
     ht_insert(l3ht, &l3htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
-              (uint32_t)maddr);
-    return maddr;
-}
-
-// L2
-static inline uint32_t L2_node_size(int height) {
-    return sizeof(L2node) + sizeof(int64_t) * height + sizeof(pptr) * height * 2;
-}
-
-static inline L2node* init_L2(int64_t key, int height, pptr down,
-                              uint8_t* buffer, __mram_ptr void* maddr) {
-    IN_DPU_ASSERT(height <= LOWER_PART_HEIGHT, "init L2: wrong height");
-    L2node* nn = (L2node*)buffer;
-    nn->key = key;
-    nn->height = height;
-    nn->down = down;
-    nn->chk = (mpint64_t)(maddr + sizeof(L2node));
-    nn->left = (mppptr)(maddr + sizeof(L2node) + sizeof(int64_t) * height);
-    nn->right = (mppptr)(maddr + sizeof(L2node) + sizeof(int64_t) * height + sizeof(pptr) * height);
-    memset(buffer + sizeof(L2node), -1, sizeof(int64_t) * height + sizeof(pptr) * height * 2);
-    return nn;
-}
-
-static inline __mram_ptr void* reserve_space_L2(uint32_t size) {
-    __mram_ptr void* ret = l2buffer + l2cnt;
-    l2cnt += size;
-    return ret;
-}
-
-static inline mL2ptr get_new_L2(int64_t key, int height, pptr down,
-                                __mram_ptr void* maddr) {
-    int l2height = (height > LOWER_PART_HEIGHT) ? LOWER_PART_HEIGHT : height;
-    // IN_DPU_ASSERT(height <= LOWER_PART_HEIGHT, "get new L2: height too big");
-    int size = L2_node_size(l2height);
-    uint8_t buffer[sizeof(L2node) +
-                   (sizeof(int64_t) + sizeof(pptr) * 2) * LOWER_PART_HEIGHT];
-    L2node* nn = init_L2(key, l2height, down, buffer, maddr);
-    nn->height = height;
-    mram_write((void*)nn, maddr, size);
-    ht_insert(l2ht, &l2htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
               (uint32_t)maddr);
     return maddr;
 }

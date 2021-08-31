@@ -109,14 +109,15 @@ int main() {
 
     init_dpus();
 
-    init_skiplist(26);
+    init_skiplist(22);
     init_test_framework();
     init_timer.end();
 
     turnon_all_timers(false);
 
-    int BATCH_SIZE_PER_DPU = 500;
+    int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    // L3_sancheck();
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
@@ -131,7 +132,7 @@ int main() {
 
     turnon_all_timers(true);
 
-    for (int i = 0; i < 10; i ++) {
+    for (int i = 0; i < 10; i++) {
         // turnon_all_timers(true);
         insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
         // turnon_all_timers(false);

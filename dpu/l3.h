@@ -29,7 +29,7 @@ extern __mram_ptr ht_slot l3ht[];
 static inline void L3_init(L3_init_task *tit) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
-    root = get_new_L3(LLONG_MIN, tit->height, tit->addr, maddr);
+    root = get_new_L3(tit->key, tit->height, tit->addr, maddr);
     L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
     mram_write(&tir, send_task_start, sizeof(L3_init_reply));
 }
@@ -56,7 +56,7 @@ static inline void L3_get(int64_t key, int i) {
     mram_write(&tgr, &dst[i], sizeof(L3_get_reply));
 }
 
-static inline int64_t L3_search(int64_t key, int i, int record_height,
+static inline int64_t L3_search(int64_t key, int record_height,
                                 mL3ptr *rightmost) {
     mL3ptr tmp = root;
     int64_t ht = root->height - 1;
@@ -72,12 +72,14 @@ static inline int64_t L3_search(int64_t key, int i, int record_height,
         ht--;
     }
     // IN_DPU_ASSERT(rightmost != NULL, "L3 search: rightmost error");
-    if (rightmost == NULL) {  // pure search task
-        L3_search_reply tsr = (L3_search_reply){.addr = tmp->down};
-        __mram_ptr L3_search_reply *dst =
-            (__mram_ptr L3_search_reply *)send_task_start;
-        mram_write(&tsr, &dst[i], sizeof(L3_search_reply));
-    }
+    // if (rightmost == NULL) {  // pure search task
+    //     // L3_search_reply tsr = (L3_search_reply){.addr = tmp->down};
+    //     L3_search_reply tsr = (L3_search_reply){.result_key = tmp->key};
+    //     __mram_ptr L3_search_reply *dst =
+    //         (__mram_ptr L3_search_reply *)send_task_start;
+    //     dst[i] = tsr;
+    //     // mram_write(&tsr, &dst[i], sizeof(L3_search_reply));
+    // }
     return tmp->key;
 }
 
@@ -116,6 +118,7 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
         for (int i = 0; i < NR_TASKLETS; i++) {
             newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
         }
+        IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
     }
 
     barrier_wait(&L3_barrier);
@@ -146,7 +149,8 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
 
     if (length > 0) {
         int i = 0;
-        L3_search(keys[i], 0, heights[i], predecessor);
+        int64_t result = L3_search(keys[i], heights[i], predecessor);
+        IN_DPU_ASSERT(result != keys[i], "duplicated key");
         for (int ht = 0; ht < heights[i]; ht++) {
             left_predecessor[ht] = right_predecessor[ht] = predecessor[ht];
             left_newnode[ht] = right_newnode[ht] = newnode[i];
@@ -156,7 +160,8 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
     }
 
     for (int i = 1; i < length; i++) {
-        L3_search(keys[i], 0, heights[i], predecessor);
+        int64_t result = L3_search(keys[i], heights[i], predecessor);
+        IN_DPU_ASSERT(result != keys[i], "duplicated key");
         int minheight = (max_height < heights[i]) ? max_height : heights[i];
         for (int ht = 0; ht < minheight; ht++) {
             if (right_predecessor[ht] == predecessor[ht]) {
@@ -230,10 +235,13 @@ static inline void L3_insert_parallel(int length, int l, int64_t *keys,
                 left_newnode[ht]->left[ht] =
                     (pptr){.id = DPU_ID, .addr = (uint32_t)right_newnode_l[ht]};
             } else {
-                // if (right_predecessor_l[ht]->right[ht].id == INVALID_DPU_ID) {
-                //     // printf("%x\n", right_predecessor_l[ht]->right[ht].addr);
+                // if (right_predecessor_l[ht]->right[ht].id == INVALID_DPU_ID)
+                // {
+                //     // printf("%x\n",
+                //     right_predecessor_l[ht]->right[ht].addr);
                 //     // printf("%d %d\n", tasklet_id, l);
-                //     // printf("%x %x\n", right_predecessor_l[ht], left_predecessor[ht]);
+                //     // printf("%x %x\n", right_predecessor_l[ht],
+                //     left_predecessor[ht]);
                 //     // print_pptr(right_predecessor_l[ht]->right[ht], "\n");
                 //     // print_pptr(left_predecessor[ht]->right[ht], "\n");
                 //     for (int i = 0; i < NR_TASKLETS; i ++) {
@@ -393,8 +401,10 @@ static inline void L3_sancheck() {
         pptr r = tmp->right[i];
         while (r.id != INVALID_DPU_ID) {
             mL3ptr rn = (mL3ptr)r.addr;
-            // printf("%lld %d-%x %d-%x\n", rn->key, tmp->right[i].id,
-            //        tmp->right[i].addr, rn->left[i].id, rn->left[i].addr);
+            if (i == 0) {
+                printf("%lld %d-%x %d-%x\n", rn->key, tmp->right[i].id,
+                       tmp->right[i].addr, rn->left[i].id, rn->left[i].addr);
+            }
             IN_DPU_ASSERT(
                 rn->left[i].id == DPU_ID && rn->left[i].addr == (uint32_t)tmp,
                 "Sancheck fail\n");

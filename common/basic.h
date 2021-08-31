@@ -25,16 +25,6 @@ inline void print_pptr(pptr x, char* str) { // ?? strange bug. need to copy befo
     printf("%s", str);
 }
 
-// typedef struct {
-//     int64_t key;
-//     pptr down, right; // dpuid & addr
-//     pptr up, left; // not used yet
-//     pptr addr; // used to debug
-//     int64_t chk;
-//     uint8_t height;
-//     uint8_t up_chain_height;
-// } node;
-
 static inline int hh(int64_t key, uint64_t height, uint64_t M) {
     assert(height == 0);
     // printf("KEY: %lld\n", key);

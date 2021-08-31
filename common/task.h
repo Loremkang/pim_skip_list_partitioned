@@ -79,8 +79,8 @@ typedef struct {
 } L3_search_task;
 
 typedef struct {
-    // int64_t result_key;
-    pptr addr;
+    int64_t result_key;
+    // pptr addr;
 } L3_search_reply;
 
 typedef struct {
