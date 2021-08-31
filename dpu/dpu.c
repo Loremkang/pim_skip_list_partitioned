@@ -171,10 +171,12 @@ void execute(int l, int r) {
             __mram_ptr L3_search_task* tst =
                 (__mram_ptr L3_search_task*)receive_task_start;
             int64_t* val = mem_alloc(sizeof(int64_t) * length);
-            for (int i = l; i < r; i++) {
+            tst += l;
+            for (int i = 0; i < length; i++) {
                 val[i] = L3_search(tst[i].key, 0, NULL);
                 // int64_t res = L3_search(tst[i].key, 0, NULL);
             }
+            // printf("tid=%d maxstep=%d\n", tasklet_id, maxstep);
             __mram_ptr L3_search_reply* dst =
                 (__mram_ptr L3_search_reply*)send_task_start;
             mram_write(val, &dst[l], sizeof(int64_t) * length);

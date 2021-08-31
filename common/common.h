@@ -39,10 +39,10 @@
 // 12 levels
 #define LOWER_PART_HEIGHT (12)
 
-// L0,1,2,3 12MB
-#define LX_BUFFER_SIZE (12 << 20)
+// L0,1,2,3 40MB
+#define LX_BUFFER_SIZE (40 << 20)
 
-// HASH TABLE 2MB. should be power of 2
-#define LX_HASHTABLE_SIZE ((2 << 20) >> 3)
+// HASH TABLE 8MB. should be power of 2
+#define LX_HASHTABLE_SIZE ((8 << 20) >> 3)
 
 /* Structure used by both the host and the dpu to communicate information */

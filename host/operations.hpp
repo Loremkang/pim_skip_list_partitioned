@@ -162,26 +162,32 @@ auto deduplication(int64_t *arr, int &length) {  // assume sorted
     auto seq = parlay::make_slice(arr, arr + length);
     parlay::sort_inplace(seq);
 
-    auto dup = parlay::tabulate(
+    auto dup = parlay::delayed_tabulate(
         length, [&](int i) -> bool { return i == 0 || seq[i] != seq[i - 1]; });
     auto packed = parlay::pack(seq, dup);
     length = packed.size();
     return packed;
+    // length = seq.size();
+    // return seq;
 }
 
 int insert_offset_buffer[BATCH_SIZE * 2];
 timer insert_init("insert_init");
+timer insert_sort("insert_sort");
+timer insert_height("insert_height");
 timer insert_taskgen("insert_taskgen");
 timer insert_exec("insert_exec");
 
 void insert(int length) {
     // printf("\n********** INIT SKIP LIST **********\n");
 
-    insert_init.start();
+    // insert_init.start();
 
     printf("\n**** INIT HEIGHT ****\n");
+    insert_sort.start();
     epoch_number++;
     auto keys = deduplication(op_keys, length);
+    insert_sort.end();
 
     // {
     //     int s = keys.size();
@@ -190,19 +196,21 @@ void insert(int length) {
     //     }
     // }
 
+    insert_height.start();
     parlay::parallel_for(0, length, [&](size_t i) {
         int32_t t = randint64(parlay::worker_id());
         t = t & (-t);
         int h = __builtin_ctz(t) + 1;
-        // h = min(h, maxheight);
-        if (h > maxheight) {
-            printf("%ld %d\n", keys[i], h);
-            h = maxheight;
-        }
+        h = min(h, maxheight);
+        // if (h > maxheight) {
+        //     printf("%ld %d\n", keys[i], h);
+        //     h = maxheight;
+        // }
         insert_heights[i] = h;
-    });
+    }, 1000);
+    insert_height.end();
 
-    insert_init.end();
+    // insert_init.end();
 
     insert_taskgen.start();
 
@@ -224,7 +232,7 @@ void insert(int length) {
         for (int j = ll; j < rr; j++) {
             ASSERT(l <= keys[j] && keys[j] < r);
             L3_insert_task tit = (L3_insert_task){
-                .key = keys[j], .addr = null_pptr, .height = insert_heights[i]};
+                .key = keys[j], .addr = null_pptr, .height = insert_heights[j]};
             push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply), i);
         }
     });
@@ -244,16 +252,32 @@ void remove(int length) {
     remove_task_generate.start();
     epoch_number++;
     auto keys = deduplication(op_keys, length);
-    init_io_buffer(true);
-    set_io_buffer_type(L3_REMOVE_TSK, EMPTY);
 
-    for (int i = 0; i < length; i++) {
-        L3_remove_task trt = (L3_remove_task){.key = keys[i]};
-        push_task(&trt, sizeof(L3_remove_task), 0, -1);
-    }
+    init_io_buffer(false);
+    set_io_buffer_type(L3_REMOVE_TSK, EMPTY);
+    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+        int64_t l = key_split[i];
+        int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
+        int ll = binary_search_local_r(-1, length - 1,
+                                       [&](int x) { return l <= keys[x]; });
+        int rr = binary_search_local_r(-1, length - 1,
+                                       [&](int x) { return r <= keys[x]; });
+        if (r >= keys[rr]) rr++;
+        ASSERT((int)i != 0 || ll == 0);
+        ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
+        for (int j = ll; j < rr; j ++) {
+            L3_remove_task trt = (L3_remove_task){.key = keys[j]};
+            push_task(&trt, sizeof(L3_remove_task), 0, i);
+        }
+    });
+    // exit(-1);
+    // for (int i = 0; i < length; i++) {
+    //     L3_remove_task trt = (L3_remove_task){.key = keys[i]};
+    //     push_task(&trt, sizeof(L3_remove_task), 0, -1);
+    // }
     remove_task_generate.end();
 
-    ASSERT(exec());
+    ASSERT(!exec());
     // buffer_state = idle;
     // if (print_debug) {
     //     print_log();

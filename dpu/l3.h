@@ -71,15 +71,6 @@ static inline int64_t L3_search(int64_t key, int record_height,
         }
         ht--;
     }
-    // IN_DPU_ASSERT(rightmost != NULL, "L3 search: rightmost error");
-    // if (rightmost == NULL) {  // pure search task
-    //     // L3_search_reply tsr = (L3_search_reply){.addr = tmp->down};
-    //     L3_search_reply tsr = (L3_search_reply){.result_key = tmp->key};
-    //     __mram_ptr L3_search_reply *dst =
-    //         (__mram_ptr L3_search_reply *)send_task_start;
-    //     dst[i] = tsr;
-    //     // mram_write(&tsr, &dst[i], sizeof(L3_search_reply));
-    // }
     return tmp->key;
 }
 

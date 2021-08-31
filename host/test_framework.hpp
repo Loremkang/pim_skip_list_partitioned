@@ -12,17 +12,18 @@ using namespace std;
 
 extern bool print_debug;
 
-static set<int64_t> golden_L3;
+static set<int64_t> predecessor_set, inserted_set;
 
 extern int64_t key_split[];
 void init_test_framework() {
     epoch_number = 0;
-    golden_L3.clear();
+    predecessor_set.clear();
+    inserted_set.clear();
     for (int i = 0; i < nr_of_dpus; i ++) {
-        golden_L3.insert(key_split[i]);
+        predecessor_set.insert(key_split[i]);
     }
-    golden_L3.insert(LLONG_MIN);
-    golden_L3.insert(LLONG_MAX);
+    predecessor_set.insert(LLONG_MIN);
+    predecessor_set.insert(LLONG_MAX);
 }
 
 timer get_timer("get");
@@ -30,8 +31,8 @@ timer get_timer("get");
 bool get_test(int length, bool check_result) {
     for (int i = 0; i < length; i++) {
         if (randint64(parlay::worker_id()) & 1) {
-            auto it = golden_L3.begin();
-            int rnd = (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
+            auto it = predecessor_set.begin();
+            int rnd = (randint64(parlay::worker_id()) % (predecessor_set.size() - 2)) +
                       1;  // don't ask -INF or INF
             advance(it, rnd);
             op_keys[i] = *it;
@@ -46,16 +47,10 @@ bool get_test(int length, bool check_result) {
     get(length);
     get_timer.end();
 
-    // if (print_debug) {
-    //     for_each(golden_L3.begin(), golden_L3.end(),
-    //              [&](int64_t v) { cout << "*" << v << endl; });
-    //     cout << endl;
-    // }
-
     if (check_result) {
         for (int i = 0; i < length; i++) {
             int64_t golden_result =
-                (golden_L3.find(op_keys[i]) != golden_L3.end()) ? 1 : 0;
+                (predecessor_set.find(op_keys[i]) != predecessor_set.end()) ? 1 : 0;
             if (op_results[i] != golden_result) {
                 cout << op_keys[i] << ' ' << op_results[i] << ' '
                      << golden_result << endl;
@@ -82,14 +77,14 @@ bool predecessor_test(int length, bool check_result) {
     predecessor_timer.end();
 
     // if (print_debug) {
-    //     for_each(golden_L3.begin(), golden_L3.end(),
+    //     for_each(predecessor_set.begin(), predecessor_set.end(),
     //              [&](int64_t v) { cout << "*" << v << endl; });
     // }
 
     cout << endl;
     if (check_result) {
         for (int i = 0; i < length; i++) {
-            set<int64_t>::iterator it = golden_L3.upper_bound(op_keys[i]);
+            set<int64_t>::iterator it = predecessor_set.upper_bound(op_keys[i]);
             it--;
             if (op_results[i] != *it) {
                 cout << i << ' ' << op_keys[i] << ' ' << op_results[i] << ' '
@@ -109,7 +104,8 @@ bool insert_test(int length, bool check_result) {
     if (check_result) {
         for (int i = 0; i < length; i++) {
             op_keys[i] = randint64(parlay::worker_id());
-            golden_L3.insert(op_keys[i]);
+            predecessor_set.insert(op_keys[i]);
+            inserted_set.insert(op_keys[i]);
         }
     } else {
         for (int i = 0; i < length; i++) {
@@ -128,16 +124,18 @@ timer remove_timer("remove");
 
 void remove_test(int length, bool check_result) {
     if (check_result) {
-        assert(golden_L3.size() > 2);
+        assert(inserted_set.size() > 0);
     }
     cout << "\n*** Start Remove Test ***" << endl;
+    cout<<inserted_set.size()<<endl;
     for (int i = 0; i < length; i++) {
         if (randint64(parlay::worker_id()) & 1) {
-            auto it = golden_L3.begin();
-            int rnd =
-                (randint64(parlay::worker_id()) % (golden_L3.size() - 2)) +
-                1;  // don't ask -INF or INF
-            advance(it, rnd);
+            // auto it = inserted_set.begin();
+            // int rnd = (randint64(parlay::worker_id()) % (inserted_set.size()));
+            // advance(it, rnd);
+            int64_t rd = randint64(parlay::worker_id());
+            set<int64_t>::iterator it = inserted_set.upper_bound(rd);
+            it--;
             op_keys[i] = *it;
         } else {
             op_keys[i] = randint64(parlay::worker_id());
@@ -152,7 +150,8 @@ void remove_test(int length, bool check_result) {
         auto dedup_keys = deduplication(op_keys, length);
         int l = dedup_keys.size();
         for (int i = 0; i < l; i++) {
-            golden_L3.erase(dedup_keys[i]);
+            inserted_set.erase(dedup_keys[i]);
+            predecessor_set.erase(dedup_keys[i]);
         }
     }
 
