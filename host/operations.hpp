@@ -87,6 +87,7 @@ void get(int length) {
 
 timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
+timer predecessor_exec("predecessor_exec");
 timer predecessor_L3_get_result("predecessor_L3_get_result");
 void predecessor(int length) {
     int64_t *keys = op_keys;
@@ -116,11 +117,11 @@ void predecessor(int length) {
             int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
 
             int loop_l = binary_search_local_r(
-                -1, length - 1, [&](int x) { return l <= keys[id[x]]; });
+                -1, length, [&](int x) { return l <= keys[id[x]]; });
             int loop_r = binary_search_local_r(
-                -1, length - 1, [&](int x) { return r <= keys[id[x]]; });
+                -1, length, [&](int x) { return r <= keys[id[x]]; });
 
-            if (r >= keys[id[loop_r]]) loop_r++;
+            // if (r >= keys[id[loop_r]]) loop_r++;
             // printf("%ld\t%ld\t%d\t%d\n", l, r, loop_l, loop_r);
             for (int j = loop_l; j < loop_r; j++) {
                 L3_search_task tst = (L3_search_task){.key = keys[id[j]]};
@@ -132,18 +133,20 @@ void predecessor(int length) {
         });
         predecessor_L3_task_generate.end();
 
-        for (int i = 0; i < nr_of_dpus; i ++) {
-            int64_t l = key_split[i];
-            int64_t r =
-                ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
-            ASSERT(i != 0 || ll[i] == 0);
-            ASSERT(i != (nr_of_dpus - 1) || rr[i] == length);
-            for (int j = ll[i]; j < rr[i]; j++) {
-                ASSERT(l <= keys[id[j]] && keys[id[j]] < r);
-            }
-        }
+        // for (int i = 0; i < nr_of_dpus; i ++) {
+        //     int64_t l = key_split[i];
+        //     int64_t r =
+        //         ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
+        //     ASSERT(i != 0 || ll[i] == 0);
+        //     ASSERT(i != (nr_of_dpus - 1) || rr[i] == length);
+        //     for (int j = ll[i]; j < rr[i]; j++) {
+        //         ASSERT(l <= keys[id[j]] && keys[id[j]] < r);
+        //     }
+        // }
 
+        predecessor_exec.start();
         ASSERT(exec());
+        predecessor_exec.end();
 
         predecessor_L3_get_result.start();
         L3_search_reply _;
@@ -221,16 +224,19 @@ void insert(int length) {
     parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
         int64_t l = key_split[i];
         int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
-        int ll = binary_search_local_r(-1, length - 1,
+        int ll = binary_search_local_r(-1, length,
                                        [&](int x) { return l <= keys[x]; });
-        int rr = binary_search_local_r(-1, length - 1,
+        int rr = binary_search_local_r(-1, length,
                                        [&](int x) { return r <= keys[x]; });
-        if (r >= keys[rr]) rr++;
+        // if (r >= keys[rr]) rr++;
         ASSERT((int)i != 0 || ll == 0);
         ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
-        // printf("%ld\t%ld\t%d\t%d\n", l, r, ll, rr);
+        // printf("%ld\t%ld\t%d\t%d\t%d\n", l, r, ll, rr, rr - ll);
         for (int j = ll; j < rr; j++) {
-            ASSERT(l <= keys[j] && keys[j] < r);
+            if (!(l <= keys[j] && keys[j] < r)) {
+                printf("%ld %ld %ld %d:%d\n", l, r, keys[j], j, length);
+                ASSERT(false);
+            }
             L3_insert_task tit = (L3_insert_task){
                 .key = keys[j], .addr = null_pptr, .height = insert_heights[j]};
             push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply), i);
@@ -258,11 +264,11 @@ void remove(int length) {
     parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
         int64_t l = key_split[i];
         int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
-        int ll = binary_search_local_r(-1, length - 1,
+        int ll = binary_search_local_r(-1, length,
                                        [&](int x) { return l <= keys[x]; });
-        int rr = binary_search_local_r(-1, length - 1,
+        int rr = binary_search_local_r(-1, length,
                                        [&](int x) { return r <= keys[x]; });
-        if (r >= keys[rr]) rr++;
+        // if (r >= keys[rr]) rr++;
         ASSERT((int)i != 0 || ll == 0);
         ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
         for (int j = ll; j < rr; j ++) {

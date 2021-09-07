@@ -37,7 +37,7 @@ bool get_test(int length, bool check_result) {
             advance(it, rnd);
             op_keys[i] = *it;
         } else {
-            op_keys[i] = randint64(parlay::worker_id());
+            op_keys[i] = randkey(parlay::worker_id());
         }
     }
 
@@ -67,7 +67,7 @@ timer predecessor_timer("predecessor");
 
 bool predecessor_test(int length, bool check_result) {
     parlay::parallel_for(0, length,
-                         [&](size_t i) { op_keys[i] = randint64(parlay::worker_id()); });
+                         [&](size_t i) { op_keys[i] = randkey(parlay::worker_id()); });
     // memset(op_results, 0, sizeof(int64_t) * BATCH_SIZE);
 
     // sort(op_keys, op_keys + length);
@@ -103,13 +103,13 @@ bool insert_test(int length, bool check_result) {
     cout << "\n*** Start Insert Test ***" << endl;
     if (check_result) {
         for (int i = 0; i < length; i++) {
-            op_keys[i] = randint64(parlay::worker_id());
+            op_keys[i] = randkey(parlay::worker_id());
             predecessor_set.insert(op_keys[i]);
             inserted_set.insert(op_keys[i]);
         }
     } else {
         for (int i = 0; i < length; i++) {
-            op_keys[i] = randint64(parlay::worker_id());
+            op_keys[i] = randkey(parlay::worker_id());
         }
     }
 
@@ -133,12 +133,12 @@ void remove_test(int length, bool check_result) {
             // auto it = inserted_set.begin();
             // int rnd = (randint64(parlay::worker_id()) % (inserted_set.size()));
             // advance(it, rnd);
-            int64_t rd = randint64(parlay::worker_id());
+            int64_t rd = randkey(parlay::worker_id());
             set<int64_t>::iterator it = inserted_set.upper_bound(rd);
             it--;
             op_keys[i] = *it;
         } else {
-            op_keys[i] = randint64(parlay::worker_id());
+            op_keys[i] = randkey(parlay::worker_id());
         }
     }
 

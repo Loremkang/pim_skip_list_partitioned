@@ -123,46 +123,49 @@ void execute(int l, int r) {
         }
 
         case L3_INSERT_TSK: {
-            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            pptr* addrs = mem_alloc(sizeof(pptr) * length);
-            int8_t* heights = mem_alloc(sizeof(int8_t) * length);
+            // int64_t* keys = mem_alloc(sizeof(int64_t) * length);
+            // pptr* addrs = mem_alloc(sizeof(pptr) * length);
+            // int8_t* heights = mem_alloc(sizeof(int8_t) * length);
 
             __mram_ptr L3_insert_task* mram_tit =
                 (__mram_ptr L3_insert_task*)receive_task_start;
             mram_tit += l;
 
-            seqreader_buffer_t local_cache = seqread_alloc();
-            seqreader_t sr;
-            L3_insert_task* tit = seqread_init(local_cache, mram_tit, &sr);
+            // seqreader_buffer_t local_cache = seqread_alloc();
+            // seqreader_t sr;
+            // L3_insert_task* tit = seqread_init(local_cache, mram_tit, &sr);
 
             newnode_size[tasklet_id] = 0;
             for (int i = 0; i < length; i++) {
-                keys[i] = tit->key;
-                addrs[i] = tit->addr;
-                heights[i] = tit->height;
-                newnode_size[tasklet_id] += L3_node_size(heights[i]);
-                tit = seqread_get(tit, sizeof(L3_insert_task), &sr);
-                IN_DPU_ASSERT(heights[i] > 0 && heights[i] < MAX_L3_HEIGHT,
+            //     keys[i] = tit->key;
+            //     addrs[i] = tit->addr;
+            //     heights[i] = tit->height;
+                int height = mram_tit[i].height;
+                newnode_size[tasklet_id] += L3_node_size(height);
+            //     tit = seqread_get(tit, sizeof(L3_insert_task), &sr);
+                IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
                               "execute: invalid height\n");
             }
 
             mL3ptr* right_predecessor_shared = bufferA_shared;
             mL3ptr* right_newnode_shared = bufferB_shared;
-            L3_insert_parallel(length, l, keys, heights, addrs, newnode_size,
-                               max_height_shared, right_predecessor_shared,
-                               right_newnode_shared);
+            // L3_insert_parallel(length, l, keys, heights, addrs, newnode_size,
+            //                    max_height_shared, right_predecessor_shared,
+            //                    right_newnode_shared);
+            L3_insert_parallel(length, l, mram_tit, newnode_size, max_height_shared,
+                               right_predecessor_shared, right_newnode_shared);
             break;
         }
 
         case L3_REMOVE_TSK: {
-            int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            __mram_ptr L3_remove_task* trt =
+            // int64_t* keys = mem_alloc(sizeof(int64_t) * length);
+            __mram_ptr L3_remove_task* mram_trt =
                 (__mram_ptr L3_remove_task*)receive_task_start;
-            trt += l;
-            mram_read(trt, keys, sizeof(int64_t) * length);
+            mram_trt += l;
+            // mram_read(trt, keys, sizeof(int64_t) * length);
 
             mL3ptr* left_node_shared = bufferA_shared;
-            L3_remove_parallel(length, keys, max_height_shared,
+            L3_remove_parallel(length, l, mram_trt, max_height_shared,
                                left_node_shared);
             break;
         }
@@ -170,16 +173,18 @@ void execute(int l, int r) {
         case L3_SEARCH_TSK: {
             __mram_ptr L3_search_task* tst =
                 (__mram_ptr L3_search_task*)receive_task_start;
-            int64_t* val = mem_alloc(sizeof(int64_t) * length);
+            // int64_t* val = mem_alloc(sizeof(int64_t) * length);
             tst += l;
-            for (int i = 0; i < length; i++) {
-                val[i] = L3_search(tst[i].key, 0, NULL);
-                // int64_t res = L3_search(tst[i].key, 0, NULL);
-            }
-            // printf("tid=%d maxstep=%d\n", tasklet_id, maxstep);
+
             __mram_ptr L3_search_reply* dst =
                 (__mram_ptr L3_search_reply*)send_task_start;
-            mram_write(val, &dst[l], sizeof(int64_t) * length);
+
+            for (int i = 0; i < length; i++) {
+                int64_t val = L3_search(tst[i].key, 0, NULL);
+                L3_search_reply tsr = (L3_search_reply){.result_key = val};
+                mram_write(&tsr, &dst[l + i], sizeof(int64_t));
+            }
+            // printf("tid=%d maxstep=%d\n", tasklet_id, maxstep);
             break;
         }
 

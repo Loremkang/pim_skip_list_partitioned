@@ -36,6 +36,15 @@ inline int64_t randint64(int thread_id) {
     return tmp;
 }
 
+const int COMPRESSION_RATE = 100;
+inline int64_t key_filter(int64_t key) {
+    return key / COMPRESSION_RATE;
+}
+
+inline int64_t randkey(int thread_id) {
+    return key_filter(randint64(thread_id));
+}
+
 template <class F>  // [valid, invalid]
 inline int binary_search_local_l(int l, int r, F f) {
     // ASSERT(l >= -1 && r >= 0 && r > l);

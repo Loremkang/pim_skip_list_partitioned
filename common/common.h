@@ -16,7 +16,7 @@
 #define STR(x) #x
 
 #define MAX_DPU (NR_DPUS)
-#define MAX_TASK_BUFFER_SIZE_PER_DPU (200 << 10) // 200KB
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (1000 << 10) // 200KB
 #define MAX_TASK_COUNT_PER_DPU (1536)
 #define MAX_L3_HEIGHT (20)
 #define MAX_THREAD_NUM (100)

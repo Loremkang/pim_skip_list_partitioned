@@ -126,13 +126,13 @@ int main() {
     // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
     // return 0;
 
-    for (int i = 0; i < 2; i ++) {
+    for (int i = 0; i < 10; i ++) {
         insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
     }
 
     turnon_all_timers(true);
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         // turnon_all_timers(true);
         insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
         // turnon_all_timers(false);

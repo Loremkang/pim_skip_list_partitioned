@@ -26,11 +26,12 @@ public:
         all_timers.push_back(this);
     }
     void print() {
-        cout<<"Timer "<<name<<": "<<endl;
-        printf("Average Time: %lf\n", total_time.count() / this->count);
-        printf("Total Time: %lf\n", total_time.count());
-        printf("Occurance: %d\n", count);
-        printf("\n");
+        // cout<<"Timer "<<name<<": "<<endl;
+        // printf("Average Time: %lf\n", total_time.count() / this->count);
+        // printf("Total Time: %lf\n", total_time.count());
+        // printf("Occurance: %d\n", count);
+        printf("%lf\n", total_time.count() / this->count);
+        // printf("\n");
     }
     void turnon(bool val) {
         on = val;
