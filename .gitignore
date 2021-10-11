@@ -3,4 +3,6 @@ build/
 .clangd/
 .vscode
 .DS_Store
+*.swp
+result.txt
 compile_commands.json
