@@ -4,5 +4,5 @@ build/
 .vscode
 .DS_Store
 *.swp
-result.txt
+result*.txt
 compile_commands.json
