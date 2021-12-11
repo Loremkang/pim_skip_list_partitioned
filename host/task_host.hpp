@@ -297,28 +297,22 @@ inline bool receive_task() {
     return true;
 }
 
-extern timer send_task_timer;
-extern timer receive_task_timer;
-extern timer execute_timer;
-extern timer exec_timer;
-
 inline bool exec() {
     // memset(receive_buffer_size, 0, sizeof(receive_buffer_size));
     // memset(receive_buffer_task_count, 0,
     // sizeof(receive_buffer_task_count));
 
-    exec_timer.start();
-    send_task_timer.start();
     if (send_task()) {
-        DPU_ASSERT(dpu_sync(dpu_set));
-        send_task_timer.end();
-        execute_timer.start();
-        DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
-        execute_timer.end();
-        receive_task_timer.start();
-        bool ret = receive_task();
-        receive_task_timer.end();
-        exec_timer.end();
+        time_nested("send", [&]() {
+            DPU_ASSERT(dpu_sync(dpu_set));
+        });
+        time_nested("exec", [&]() {
+            DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
+        });
+        bool ret;
+        time_nested("receive", [&]() {
+            ret = receive_task();
+        });
         return ret;
     } else {
         return false;

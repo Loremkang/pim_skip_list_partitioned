@@ -21,22 +21,24 @@ int maxheight; // setting max height
 
 int64_t key_split[MAX_DPU + 10];
 
+enum predecessor_type { predecessor_insert, predecessor_only };
+
+void init_splits() {
+    printf("\n********** INIT SPLITS **********\n");
+    uint64_t split = UINT64_MAX / nr_of_dpus;
+    key_split[0] = INT64_MIN;
+    for (int i = 1; i < nr_of_dpus; i++) {
+        key_split[i] = key_split[i - 1] + split;
+        // cout<<key_split[i]<<endl;
+    }
+    // key_split[nr_of_dpus] = INT64_MAX;
+}
+
 void init_skiplist(uint32_t height) {
-    epoch_number ++;
+    epoch_number++;
     maxheight = height;
 
     printf("\n********** INIT SKIP LIST **********\n");
-
-    {
-        printf("\n********** INIT SPLITS **********\n");
-        uint64_t split = UINT64_MAX / nr_of_dpus;
-        key_split[0] = INT64_MIN;
-        for (int i = 1; i < nr_of_dpus; i++) {
-            key_split[i] = key_split[i - 1] + split;
-            // cout<<key_split[i]<<endl;
-        }
-        // key_split[nr_of_dpus] = INT64_MAX;
-    }
 
     pptr l3node = null_pptr;
     {
@@ -44,9 +46,7 @@ void init_skiplist(uint32_t height) {
         set_io_buffer_type(L3_INIT_TSK, L3_INIT_REP);
         for (int i = 0; i < nr_of_dpus; i++) {
             L3_init_task tit = (L3_init_task){
-                              .key = key_split[i],
-                              .addr = null_pptr,
-                              .height = height};
+                .key = key_split[i], .addr = null_pptr, .height = height};
             push_task(&tit, sizeof(L3_init_task), sizeof(L3_init_reply), i);
         }
         ASSERT(exec());  // insert upper part -INF
@@ -89,15 +89,14 @@ timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
 timer predecessor_exec("predecessor_exec");
 timer predecessor_L3_get_result("predecessor_L3_get_result");
-void predecessor(int length) {
+void predecessor(predecessor_type type, int length) {
+    (void)type;
     int64_t *keys = op_keys;
 
     epoch_number++;
     // printf("START PREDECESSOR\n");
-    auto id = parlay::tabulate(length, [&](int i) {return i;});
-    parlay::sort_inplace(id, [&] (int i, int j) {
-        return keys[i] < keys[j];
-    });
+    auto id = parlay::tabulate(length, [&](int i) { return i; });
+    parlay::sort_inplace(id, [&](int i, int j) { return keys[i] < keys[j]; });
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld\n", keys[i]);
     // }
@@ -114,7 +113,8 @@ void predecessor(int length) {
 
         parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
             int64_t l = key_split[i];
-            int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
+            int64_t r =
+                ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
 
             int loop_l = binary_search_local_r(
                 -1, length, [&](int x) { return l <= keys[id[x]]; });
@@ -144,9 +144,7 @@ void predecessor(int length) {
         //     }
         // }
 
-        predecessor_exec.start();
-        ASSERT(exec());
-        predecessor_exec.end();
+        time_nested("exec", [&]() { ASSERT(exec()); });
 
         predecessor_L3_get_result.start();
         L3_search_reply _;
@@ -187,10 +185,12 @@ void insert(int length) {
     // insert_init.start();
 
     printf("\n**** INIT HEIGHT ****\n");
-    insert_sort.start();
+    parlay::sequence<int64_t> keys;
+    // insert_sort.start();
+    time_nested("sort", [&]() { keys = deduplication(op_keys, length); });
     epoch_number++;
-    auto keys = deduplication(op_keys, length);
-    insert_sort.end();
+    // auto keys = deduplication(op_keys, length);
+    // insert_sort.end();
 
     // {
     //     int s = keys.size();
@@ -199,56 +199,58 @@ void insert(int length) {
     //     }
     // }
 
-    insert_height.start();
-    parlay::parallel_for(0, length, [&](size_t i) {
-        int32_t t = randint64(parlay::worker_id());
-        t = t & (-t);
-        int h = __builtin_ctz(t) + 1;
-        h = min(h, maxheight);
-        // if (h > maxheight) {
-        //     printf("%ld %d\n", keys[i], h);
-        //     h = maxheight;
-        // }
-        insert_heights[i] = h;
-    }, 1000);
-    insert_height.end();
+    // insert_height.start();
+    time_nested("init height", [&]() {
+        parlay::parallel_for(0, length, [&](size_t i) {
+            int32_t t = randint64(parlay::worker_id());
+            t = t & (-t);
+            int h = __builtin_ctz(t) + 1;
+            h = min(h, maxheight);
+            // if (h > maxheight) {
+            //     printf("%ld %d\n", keys[i], h);
+            //     h = maxheight;
+            // }
+            insert_heights[i] = h;
+        });
+    });
+
+    // insert_height.end();
 
     // insert_init.end();
 
-    insert_taskgen.start();
+    time_nested("taskgen", [&]() {
+        printf("\n**** INSERT L3 ****\n");
+        init_io_buffer(false);
+        set_io_buffer_type(L3_INSERT_TSK, L3_INSERT_REP);
 
-    printf("\n**** INSERT L3 ****\n");
-    init_io_buffer(false);
-    set_io_buffer_type(L3_INSERT_TSK, L3_INSERT_REP);
-
-    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
-        int64_t l = key_split[i];
-        int64_t r = ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
-        int ll = binary_search_local_r(-1, length,
-                                       [&](int x) { return l <= keys[x]; });
-        int rr = binary_search_local_r(-1, length,
-                                       [&](int x) { return r <= keys[x]; });
-        // if (r >= keys[rr]) rr++;
-        ASSERT((int)i != 0 || ll == 0);
-        ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
-        // printf("%ld\t%ld\t%d\t%d\t%d\n", l, r, ll, rr, rr - ll);
-        for (int j = ll; j < rr; j++) {
-            if (!(l <= keys[j] && keys[j] < r)) {
-                printf("%ld %ld %ld %d:%d\n", l, r, keys[j], j, length);
-                ASSERT(false);
+        parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+            int64_t l = key_split[i];
+            int64_t r =
+                ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
+            int ll = binary_search_local_r(-1, length,
+                                           [&](int x) { return l <= keys[x]; });
+            int rr = binary_search_local_r(-1, length,
+                                           [&](int x) { return r <= keys[x]; });
+            // if (r >= keys[rr]) rr++;
+            ASSERT((int)i != 0 || ll == 0);
+            ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
+            // printf("%ld\t%ld\t%d\t%d\t%d\n", l, r, ll, rr, rr - ll);
+            for (int j = ll; j < rr; j++) {
+                if (!(l <= keys[j] && keys[j] < r)) {
+                    printf("%ld %ld %ld %d:%d\n", l, r, keys[j], j, length);
+                    ASSERT(false);
+                }
+                L3_insert_task tit =
+                    (L3_insert_task){.key = keys[j],
+                                     .addr = null_pptr,
+                                     .height = insert_heights[j]};
+                push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply),
+                          i);
             }
-            L3_insert_task tit = (L3_insert_task){
-                .key = keys[j], .addr = null_pptr, .height = insert_heights[j]};
-            push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply), i);
-        }
+        });
     });
-    // ASSERT(exec());
 
-    insert_taskgen.end();
-
-    insert_exec.start();
-    exec();
-    insert_exec.end();
+    time_nested("exec", [&]() { exec(); });
     buffer_state = idle;
 }
 
@@ -271,7 +273,7 @@ void remove(int length) {
         // if (r >= keys[rr]) rr++;
         ASSERT((int)i != 0 || ll == 0);
         ASSERT((int)i != (nr_of_dpus - 1) || rr == length);
-        for (int j = ll; j < rr; j ++) {
+        for (int j = ll; j < rr; j++) {
             L3_remove_task trt = (L3_remove_task){.key = keys[j]};
             push_task(&trt, sizeof(L3_remove_task), 0, i);
         }

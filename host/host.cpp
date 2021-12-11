@@ -109,6 +109,7 @@ int main() {
 
     init_dpus();
 
+    init_splits();
     init_skiplist(19);
     init_test_framework();
     init_timer.end();
@@ -126,23 +127,27 @@ int main() {
     // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
     // return 0;
 
-    for (int i = 0; i < 10; i ++) {
-        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+    bool check_result = false;
+
+    for (int i = 0; i < 100; i ++) {
+        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
     }
 
     turnon_all_timers(true);
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 100; i++) {
         // turnon_all_timers(true);
-        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
         // turnon_all_timers(false);
-        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
+        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result));
         // print_log(0, true);
         // exit(-1);
-        remove_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
+        // remove_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
     }
     // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-    print_all_timers();
+    print_all_timers(pt_full);
+    print_all_timers(pt_succinct_time);
+    print_all_timers(pt_name);
     // init_timer.print();
     // insert_timer.print();
     // predecessor_timer.print();

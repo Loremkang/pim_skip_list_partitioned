@@ -36,7 +36,7 @@ inline int64_t randint64(int thread_id) {
     return tmp;
 }
 
-const int COMPRESSION_RATE = 100;
+const int COMPRESSION_RATE = 1;
 inline int64_t key_filter(int64_t key) {
     return key / COMPRESSION_RATE;
 }
@@ -73,4 +73,18 @@ inline int binary_search_local_r(int l, int r, F f) {
         mid = (l + r) >> 1;
     }
     return r;
+}
+
+#define PARALLEL_ON true
+
+template <class F>
+inline void debug_parallel_for(size_t start, size_t end, F f, bool parallel = true, long granularity = 0L,
+                               bool conservative = false) {
+    if (PARALLEL_ON && parallel) {
+        parlay::parallel_for(start, end, f, granularity, conservative);
+    } else {
+        for (size_t i = start; i < end; i++) {
+            f(i);
+        }
+    }
 }

@@ -36,10 +36,7 @@
 // #define LOWER_PART_HEIGHT (6)
 #define BATCH_SIZE (MAX_DPU * MAX_TASK_COUNT_PER_DPU)
 
-// 12 levels
-#define LOWER_PART_HEIGHT (12)
-
-// L0,1,2,3 40MB
+// L0,1,2,3 50MB
 #define LX_BUFFER_SIZE (40 << 20)
 
 // HASH TABLE 8MB. should be power of 2
