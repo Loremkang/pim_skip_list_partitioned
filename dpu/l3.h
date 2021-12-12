@@ -29,7 +29,7 @@ extern __mram_ptr ht_slot l3ht[];
 static inline void L3_init(L3_init_task *tit) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
-    root = get_new_L3(tit->key, tit->height, tit->addr, maddr);
+    root = get_new_L3(tit->key, tit->value, tit->height, tit->addr, maddr);
     L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
     mram_write(&tir, send_task_start, sizeof(L3_init_reply));
 }
@@ -57,7 +57,7 @@ static inline void L3_get(int64_t key, int i) {
 }
 
 static inline int64_t L3_search(int64_t key, int record_height,
-                                mL3ptr *rightmost) {
+                                mL3ptr *rightmost, int64_t* value) {
     mL3ptr tmp = root;
     int64_t ht = root->height - 1;
     while (ht >= 0) {
@@ -70,6 +70,9 @@ static inline int64_t L3_search(int64_t key, int record_height,
             rightmost[ht] = tmp;
         }
         ht--;
+    }
+    if (value != NULL) {
+        *value = tmp->value;
     }
     return tmp->key;
 }
@@ -131,8 +134,9 @@ static inline void L3_insert_parallel(int length, int l,
     for (int i = 0; i < length; i++) {
         int64_t key = mram_tit[i].key;
         int64_t height = mram_tit[i].height;
+        int64_t value = mram_tit[i].value;
         pptr addr = mram_tit[i].addr;
-        newnode[i] = (int64_t)get_new_L3(key, height, addr, maddr);
+        newnode[i] = (int64_t)get_new_L3(key, value, height, addr, maddr);
         maddr += L3_node_size(height);
         if (height > max_height) {
             max_height = height;
@@ -157,7 +161,7 @@ static inline void L3_insert_parallel(int length, int l,
         int i = 0;
         int height = mram_tit[i].height;
         int64_t key = mram_tit[i].key;
-        int64_t result = L3_search(key, height, predecessor);
+        int64_t result = L3_search(key, height, predecessor, NULL);
         IN_DPU_ASSERT(result != key, "duplicated key");
         for (int ht = 0; ht < height; ht++) {
             mL3ptr nn = (mL3ptr)newnode[i];
@@ -171,7 +175,7 @@ static inline void L3_insert_parallel(int length, int l,
     for (int i = 1; i < length; i++) {
         int height = mram_tit[i].height;
         int64_t key = mram_tit[i].key;
-        int64_t result = L3_search(key, height, predecessor);
+        int64_t result = L3_search(key, height, predecessor, NULL);
         mL3ptr nn = (mL3ptr)newnode[i];
 
         IN_DPU_ASSERT(result != key, "duplicated key");

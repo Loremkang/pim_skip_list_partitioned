@@ -180,8 +180,9 @@ void execute(int l, int r) {
                 (__mram_ptr L3_search_reply*)send_task_start;
 
             for (int i = 0; i < length; i++) {
-                int64_t val = L3_search(tst[i].key, 0, NULL);
-                L3_search_reply tsr = (L3_search_reply){.result_key = val};
+                int64_t value;
+                int64_t key = L3_search(tst[i].key, 0, NULL, &value);
+                L3_search_reply tsr = (L3_search_reply){.result_key = value};
                 mram_write(&tsr, &dst[l + i], sizeof(int64_t));
             }
             // printf("tid=%d maxstep=%d\n", tasklet_id, maxstep);

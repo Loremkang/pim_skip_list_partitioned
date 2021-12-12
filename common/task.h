@@ -61,6 +61,7 @@ typedef struct {
     int64_t key;
     pptr addr; // addr of the lower part root
     int64_t height;
+    int64_t value;
 } L3_insert_task;
 
 typedef struct {

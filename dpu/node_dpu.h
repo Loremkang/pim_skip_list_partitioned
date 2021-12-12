@@ -11,6 +11,7 @@ typedef __mram_ptr int64_t* mpint64_t;
 
 typedef struct L3node {
     int64_t key;
+    int64_t value;
     int64_t height;
     pptr down;
     mppptr left __attribute__((aligned (8)));

@@ -46,7 +46,7 @@ void init_skiplist(uint32_t height) {
         set_io_buffer_type(L3_INIT_TSK, L3_INIT_REP);
         for (int i = 0; i < nr_of_dpus; i++) {
             L3_init_task tit = (L3_init_task){
-                .key = key_split[i], .addr = null_pptr, .height = height};
+                .key = key_split[i], .addr = null_pptr, .height = height, .value = INT64_MIN};
             push_task(&tit, sizeof(L3_init_task), sizeof(L3_init_reply), i);
         }
         ASSERT(exec());  // insert upper part -INF
@@ -65,12 +65,10 @@ void init_skiplist(uint32_t height) {
     }
 }
 
-void get(int length) {
+void get(int length, int64_t* keys) {
+    assert(false);
     epoch_number++;
     // printf("START GET\n");
-
-    libcuckoo::cuckoohash_map<int64_t, int> key2offset;
-    key2offset.reserve(length * 2);
 
     init_io_buffer(false);
     set_io_buffer_type(L2_GET_TSK, L2_GET_REP);
@@ -78,7 +76,7 @@ void get(int length) {
         int l = length * i / nr_of_dpus;
         int r = length * (i + 1) / nr_of_dpus;
         for (int j = l; j < r; j++) {
-            L2_get_task tgt = (L2_get_task){.key = op_keys[j]};
+            L2_get_task tgt = (L2_get_task){.key = keys[j]};
             push_task(&tgt, sizeof(L2_get_task), sizeof(L2_get_task), i);
         }
     });
@@ -89,9 +87,8 @@ timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
 timer predecessor_exec("predecessor_exec");
 timer predecessor_L3_get_result("predecessor_L3_get_result");
-void predecessor(predecessor_type type, int length) {
+void predecessor(predecessor_type type, int length, int64_t* keys) {
     (void)type;
-    int64_t *keys = op_keys;
 
     epoch_number++;
     // printf("START PREDECESSOR\n");
@@ -133,17 +130,6 @@ void predecessor(predecessor_type type, int length) {
         });
         predecessor_L3_task_generate.end();
 
-        // for (int i = 0; i < nr_of_dpus; i ++) {
-        //     int64_t l = key_split[i];
-        //     int64_t r =
-        //         ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
-        //     ASSERT(i != 0 || ll[i] == 0);
-        //     ASSERT(i != (nr_of_dpus - 1) || rr[i] == length);
-        //     for (int j = ll[i]; j < rr[i]; j++) {
-        //         ASSERT(l <= keys[id[j]] && keys[id[j]] < r);
-        //     }
-        // }
-
         time_nested("exec", [&]() { ASSERT(exec()); });
 
         predecessor_L3_get_result.start();
@@ -179,7 +165,7 @@ timer insert_height("insert_height");
 timer insert_taskgen("insert_taskgen");
 timer insert_exec("insert_exec");
 
-void insert(int length) {
+void insert(int length, int64_t* insert_keys, int64_t* insert_values) {
     // printf("\n********** INIT SKIP LIST **********\n");
 
     // insert_init.start();
@@ -187,9 +173,9 @@ void insert(int length) {
     printf("\n**** INIT HEIGHT ****\n");
     parlay::sequence<int64_t> keys;
     // insert_sort.start();
-    time_nested("sort", [&]() { keys = deduplication(op_keys, length); });
+    time_nested("sort", [&]() { keys = deduplication(insert_keys, length); });
     epoch_number++;
-    // auto keys = deduplication(op_keys, length);
+    // auto keys = deduplication(insert_keys, length);
     // insert_sort.end();
 
     // {
@@ -243,7 +229,8 @@ void insert(int length) {
                 L3_insert_task tit =
                     (L3_insert_task){.key = keys[j],
                                      .addr = null_pptr,
-                                     .height = insert_heights[j]};
+                                     .height = insert_heights[j],
+                                     .value = insert_values[j]};
                 push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply),
                           i);
             }
@@ -256,10 +243,10 @@ void insert(int length) {
 
 timer remove_task_generate("remove_task_generate");
 
-void remove(int length) {
+void remove(int length, int64_t* remove_keys) {
     remove_task_generate.start();
     epoch_number++;
-    auto keys = deduplication(op_keys, length);
+    auto keys = deduplication(remove_keys, length);
 
     init_io_buffer(false);
     set_io_buffer_type(L3_REMOVE_TSK, EMPTY);

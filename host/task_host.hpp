@@ -39,9 +39,14 @@ static int64_t receive_buffer_type[MAX_DPU << AFSP];
 static atomic<int64_t> receive_buffer_offset[MAX_DPU << AFSP];
 static atomic<int64_t> receive_buffer_count[MAX_DPU << AFSP];
 
-static uint8_t io_buffer[MAX_DPU]
-                        [MAX_TASK_BUFFER_SIZE_PER_DPU];  // for broadcast, 0 as
-                                                         // send, 1 as receive
+// static uint8_t io_buffer[MAX_DPU]
+//                         [MAX_TASK_BUFFER_SIZE_PER_DPU];  // for broadcast, 0 as
+//                                                          // send, 1 as receive
+static uint8_t (*io_buffer)[MAX_TASK_BUFFER_SIZE_PER_DPU];
+
+inline void init_io_manager() {
+    io_buffer = new uint8_t[MAX_DPU][MAX_TASK_BUFFER_SIZE_PER_DPU];
+}
 
 inline void print_log(uint32_t position, bool show_all_dpu = false) {
     DPU_FOREACH(dpu_set, dpu, each_dpu) {

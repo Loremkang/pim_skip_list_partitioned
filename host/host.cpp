@@ -38,7 +38,8 @@ extern "C" {
 #include "task_host.hpp"
 
 #include "host.hpp"
-#include "test_framework.hpp"
+// #include "test_framework.hpp"
+#include "test_framework_from_file.hpp"
 #include "operations.hpp"
 #include "timer.hpp"
 #include "util.hpp"
@@ -107,6 +108,8 @@ int main() {
     // randint64_test();
     // return 0;
 
+    init_io_manager();
+
     init_dpus();
 
     init_splits();
@@ -114,37 +117,45 @@ int main() {
     init_test_framework();
     init_timer.end();
 
-    turnon_all_timers(false);
+    bool file_test = true;
+    if (file_test) {
+        int actual_batch_size = 1000000;
 
-    int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
-    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
-    // L3_sancheck();
-    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
-    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
-    // insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, true);
-    // // L2_print_all_nodes();
-    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
-    // return 0;
+        task* tasks;
+        int64_t init_total_length;
+        read_task_file(init_file_name, tasks, init_total_length);
+        ASSERT(init_total_length == 1e8);
 
-    bool check_result = false;
+        int init_round = 100;
+        execute(tasks, actual_batch_size, init_round);
 
-    for (int i = 0; i < 100; i ++) {
-        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
-    }
+        int64_t test_total_length;
+        read_task_file(base_dir + "predecessor.buffer", tasks, test_total_length);
+        // read_task_file(base_dir + "insert.buffer", tasks, test_total_length);
+        ASSERT(test_total_length == 1e8);
 
-    turnon_all_timers(true);
+        int test_round = 100;
+        execute(tasks, actual_batch_size, test_round);
 
-    for (int i = 0; i < 100; i++) {
-        // turnon_all_timers(true);
-        insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+    } else {
         // turnon_all_timers(false);
-        assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result));
-        // print_log(0, true);
-        // exit(-1);
-        // remove_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+
+        // int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
+
+        // bool check_result = false;
+
+        // for (int i = 0; i < 100; i++) {
+        //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+        // }
+
+        // turnon_all_timers(true);
+
+        // for (int i = 0; i < 100; i++) {
+        //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+        //     assert(
+        //         predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result));
+        // }
     }
-    // assert(predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, true));
     print_all_timers(pt_full);
     print_all_timers(pt_succinct_time);
     print_all_timers(pt_name);

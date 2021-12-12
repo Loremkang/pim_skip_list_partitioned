@@ -114,10 +114,11 @@ static inline uint32_t L3_node_size(int height) {
     return sizeof(L3node) + sizeof(pptr) * height * 2;
 }
 
-static inline L3node* init_L3(int64_t key, int height, pptr down,
+static inline L3node* init_L3(int64_t key, int64_t value, int height, pptr down,
                               uint8_t* buffer, __mram_ptr void* maddr) {
     L3node* nn = (L3node*)buffer;
     nn->key = key;
+    nn->value = value;
     nn->height = height;
     nn->down = down;
     nn->left = (mppptr)(maddr + sizeof(L3node));
@@ -137,11 +138,11 @@ static inline __mram_ptr void* reserve_space_L3(uint32_t size) {
     return ret;
 }
 
-static inline mL3ptr get_new_L3(int64_t key, int height, pptr down, __mram_ptr void* maddr) {
+static inline mL3ptr get_new_L3(int64_t key, int64_t value, int height, pptr down, __mram_ptr void* maddr) {
     int size = L3_node_size(height);
     // __mram_ptr void* maddr = reserve_space_L3(size);
     uint8_t buffer[sizeof(L3node) + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
-    L3node* nn = init_L3(key, height, down, buffer, maddr);
+    L3node* nn = init_L3(key, value, height, down, buffer, maddr);
     mram_write((void*)nn, maddr, size);
     ht_insert(l3ht, &l3htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
               (uint32_t)maddr);
