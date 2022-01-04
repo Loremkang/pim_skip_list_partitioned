@@ -110,6 +110,9 @@ inline size_t num_blocks(size_t n, size_t block_size) {
 
 int batch_round = 0;
 
+extern int64_t op_keys[];
+extern int64_t op_results[];
+
 void execute(task* tasks, int actual_batch_size, int rounds) {
     turnon_all_timers(true);
     time_root("exec", [&]() {
@@ -161,8 +164,7 @@ void execute(task* tasks, int actual_batch_size, int rounds) {
                                 break;
                             }
                             case task_t::update_t: {
-                                update_keys[c[x]] = t.tsk.u.key;
-                                update_values[c[x]++] = t.tsk.u.value;
+                                update_tasks[c[x]++] = t.tsk.u;
                                 break;
                             }
                             case task_t::predecessor_t: {
@@ -174,8 +176,7 @@ void execute(task* tasks, int actual_batch_size, int rounds) {
                                 break;
                             }
                             case task_t::insert_t: {
-                                insert_keys[c[x]] = t.tsk.i.key;
-                                insert_values[c[x]++] = t.tsk.i.value;
+                                insert_tasks[c[x]++] = t.tsk.i;
                                 break;
                             }
                             case task_t::remove_t: {
@@ -198,7 +199,7 @@ void execute(task* tasks, int actual_batch_size, int rounds) {
                     switch(j) {
                         case (int)task_t::get_t: {
                             time_root("get", [&]() {
-                                get(tasks_count[j], get_keys);
+                                assert(false);
                             });
                             break;
                         }
@@ -208,7 +209,23 @@ void execute(task* tasks, int actual_batch_size, int rounds) {
                         }
                         case (int)task_t::predecessor_t: {
                             time_root("predecessor", [&]() {
-                                predecessor(predecessor_only, tasks_count[j], predecessor_keys);
+                                int len = tasks_count[j];
+                                // auto id = parlay::tabulate(
+                                //     length, [&](int i) { return i; });
+                                // parlay::sort_inplace(id, [&](int i, int j) {
+                                //     return predecessor_keys[i] < predecessor_keys[j];
+                                // });
+
+                                // parlay::parallel_for(0, len, [&](int i) {
+                                //     op_keys[i] = predecessor_keys[id[i]];
+                                // });
+
+                                predecessor(predecessor_only, len,
+                                            op_keys);
+                                
+                                // parlay::sort_inplace(op_results, [&](int i, int j) {
+                                //     return id[i] < id[j];
+                                // })
                             });
                             break;
                         }
@@ -218,12 +235,26 @@ void execute(task* tasks, int actual_batch_size, int rounds) {
                         }
                         case (int)task_t::insert_t: {
                             time_root("insert", [&]() {
-                                insert(tasks_count[j], insert_keys, insert_values);
+                                int len = tasks_count[j];
+                                parlay::sort_inplace(parlay::make_slice(insert_tasks, insert_tasks + len), [&](const insert_task& a, const insert_task& b) {
+                                    return a.key < b.key;
+                                });
+                                auto dup = parlay::delayed_tabulate(
+                                    len, [&](int i) -> bool { return i == 0 || insert_tasks[i].key != insert_tasks[i - 1].key; });
+
+                                auto tasks = parlay::pack(insert_tasks, dup);
+                                insert(tasks_count[j], tasks);
                             });
                             break;
                         }
                         case (int)task_t::remove_t: {
                             time_root("remove", [&]() {
+                                int len = tasks_count[j];
+                                auto keys = parlay::make_slice(remove_keys, remove_keys + len);
+                                parlay::sort_inplace(keys);
+                                auto dup = parlay::delayed_tabulate(
+                                    len, [&](int i) -> bool { return i == 0 || keys[i] != keys[i - 1]; });
+                                auto tasks = parlay::pack(keys, dup);
                                 remove(tasks_count[j], remove_keys);
                             });
                             break;

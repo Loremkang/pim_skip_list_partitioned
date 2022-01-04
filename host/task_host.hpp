@@ -171,6 +171,8 @@ inline void apply_to_all_reply(bool parallel, T t, F f) {
     buffer_state = idle;
 }
 
+int64_t total_io = 0;
+
 inline bool send_task() {
     ASSERT((buffer_state == send_direct) || (buffer_state == send_broadcast));
     if (buffer_state == send_broadcast) {
@@ -201,6 +203,7 @@ inline bool send_task() {
                    sizeof(int64_t));
         }
         cout<<"Parallel Send: task size="<<max_size<<endl;
+        total_io += max_size * nr_of_dpus;
         // printf("Parallel Send: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t) * 3) {
             cout << "Empty Send Task" << endl;
@@ -242,6 +245,7 @@ inline bool receive_task() {
             max_size = max(max_size, receive_buffer_offset[i << AFSP].load());
         }
         cout<<"Parallel Receive: task size="<<max_size<<endl;
+        total_io += max_size * nr_of_dpus;
         // printf("Parallel Receive: task size=%lu\n", max_size);
         if (max_size == sizeof(int64_t)) {
             DPU_ASSERT(dpu_sync(dpu_set));

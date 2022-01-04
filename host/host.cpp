@@ -124,19 +124,22 @@ int main() {
         task* tasks;
         int64_t init_total_length;
         read_task_file(init_file_name, tasks, init_total_length);
-        ASSERT(init_total_length == 1e8);
+        ASSERT(init_total_length == 8e8);
 
-        int init_round = 100;
+        int init_round = 800;
         execute(tasks, actual_batch_size, init_round);
 
+        reset_all_timers();
+
         int64_t test_total_length;
-        read_task_file(base_dir + "predecessor.buffer", tasks, test_total_length);
+        read_task_file(base_dir + "2insert.buffer", tasks, test_total_length);
         // read_task_file(base_dir + "insert.buffer", tasks, test_total_length);
-        ASSERT(test_total_length == 1e8);
+        ASSERT(test_total_length == 2e8);
 
-        int test_round = 100;
+        total_io = 0;
+        int test_round = 200;
         execute(tasks, actual_batch_size, test_round);
-
+        cout<<"total io: "<<total_io<<endl;
     } else {
         // turnon_all_timers(false);
 

@@ -103,7 +103,7 @@ inline timer* start_timer(string name) {
 }
 
 template <class F>
-inline void time_root(string basename, F f, bool detail = true) {
+inline void time_root(string basename, F f, bool detail = false) {
     curname = basename;
     cout << curname << endl;
     if (!all_timers.count(curname)) {
@@ -121,7 +121,7 @@ inline void time_root(string basename, F f, bool detail = true) {
 #define INNER_TIMER (true)
 
 template <class F>
-inline void time_nested(string deltaname, F f, bool detail = true) {
+inline void time_nested(string deltaname, F f, bool detail = false) {
     if (INNER_TIMER) {
         string prename = curname;
         curname = curname + string(" -> ") + deltaname;
@@ -156,14 +156,14 @@ inline string time_nested_start(string deltaname) {
     return prename;
 }
 
-inline void time_nested_end(string prename, bool detail = true) {
+inline void time_nested_end(string prename, bool detail = false) {
     timer* t = all_timers[curname];
     t->end(detail);
     curname = prename;
 }
 
 template <class F>
-inline void time_f(string name, F f, bool detail = true) {
+inline void time_f(string name, F f, bool detail = false) {
     cout << name << endl;
     if (!all_timers.count(name)) {
         timer* tt = new timer(name);

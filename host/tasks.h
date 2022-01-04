@@ -55,10 +55,12 @@ struct task {
 
 // keep the order of these arrays
 int64_t get_keys[BATCH_SIZE];
-int64_t update_keys[BATCH_SIZE], update_values[BATCH_SIZE];
+// int64_t update_keys[BATCH_SIZE], update_values[BATCH_SIZE];
+update_task update_tasks[BATCH_SIZE];
 int64_t scan_keys[BATCH_SIZE];
-int64_t predecessor_keys[BATCH_SIZE];
-int64_t insert_keys[BATCH_SIZE], insert_values[BATCH_SIZE];
+int64_t predecessor_keys[BATCH_SIZE], predecessor_results[BATCH_SIZE];
+// int64_t insert_keys[BATCH_SIZE], insert_values[BATCH_SIZE];
+insert_task insert_tasks[BATCH_SIZE];
 int64_t remove_keys[BATCH_SIZE];
 
 int tasks_count[TASK_TYPE];

@@ -59,13 +59,13 @@
 /* -------------------------- Level 3 -------------------------- */
 typedef struct {
     int64_t key;
-    pptr addr; // addr of the lower part root
+    // pptr addr; // addr of the lower part root
     int64_t height;
     int64_t value;
 } L3_insert_task;
 
 typedef struct {
-    pptr addr; // addr of the upper part node
+    // pptr addr; // addr of the upper part node
 } L3_insert_reply;
 
 typedef L3_insert_task L3_init_task;

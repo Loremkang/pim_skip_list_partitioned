@@ -40,48 +40,49 @@ void init_skiplist(uint32_t height) {
 
     printf("\n********** INIT SKIP LIST **********\n");
 
-    pptr l3node = null_pptr;
+    // pptr l3node = null_pptr;
     {
         init_io_buffer(false);
         set_io_buffer_type(L3_INIT_TSK, L3_INIT_REP);
         for (int i = 0; i < nr_of_dpus; i++) {
             L3_init_task tit = (L3_init_task){
-                .key = key_split[i], .addr = null_pptr, .height = height, .value = INT64_MIN};
-            push_task(&tit, sizeof(L3_init_task), sizeof(L3_init_reply), i);
+                .key = key_split[i], .height = height, .value = INT64_MIN};
+            push_task(&tit, sizeof(L3_init_task), 0, i);
         }
-        ASSERT(exec());  // insert upper part -INF
+        ASSERT(!exec());  // insert upper part -INF
 
-        L3_init_reply _;
-        apply_to_all_reply(false, _, [&](L3_init_reply &tsr, int i, int j) {
-            (void)i;
-            (void)j;
-            ASSERT(buffer_state == receive_direct);
-            if (l3node.id == INVALID_DPU_ID) {
-                l3node = tsr.addr;
-            } else {
-                ASSERT(l3node.addr == tsr.addr.addr);
-            }
-        });
+        // L3_init_reply _;
+        // apply_to_all_reply(false, _, [&](L3_init_reply &tsr, int i, int j) {
+        //     (void)i;
+        //     (void)j;
+        //     ASSERT(buffer_state == receive_direct);
+        //     if (l3node.id == INVALID_DPU_ID) {
+        //         l3node = tsr.addr;
+        //     } else {
+        //         ASSERT(l3node.addr == tsr.addr.addr);
+        //     }
+        // });
     }
 }
 
-void get(int length, int64_t* keys) {
-    assert(false);
-    epoch_number++;
-    // printf("START GET\n");
+// void get(int length, int64_t* keys) {
+//     assert(false);
+//     epoch_number++;
+//     // printf("START GET\n");
 
-    init_io_buffer(false);
-    set_io_buffer_type(L2_GET_TSK, L2_GET_REP);
-    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
-        int l = length * i / nr_of_dpus;
-        int r = length * (i + 1) / nr_of_dpus;
-        for (int j = l; j < r; j++) {
-            L2_get_task tgt = (L2_get_task){.key = keys[j]};
-            push_task(&tgt, sizeof(L2_get_task), sizeof(L2_get_task), i);
-        }
-    });
-    ASSERT(exec());
-}
+//     init_io_buffer(false);
+//     set_io_buffer_type(L2_GET_TSK, L2_GET_REP);
+//     parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+//         int l = length * i / nr_of_dpus;
+//         int r = length * (i + 1) / nr_of_dpus;
+//         for (int j = l; j < r; j++) {
+//             L2_get_task tgt = (L2_get_task){.key = keys[j]};
+//             push_task(&tgt, sizeof(L2_get_task), sizeof(L2_get_task), i);
+//         }
+//     });
+//     ASSERT(exec());
+//     parlay::
+// }
 
 timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
@@ -92,8 +93,8 @@ void predecessor(predecessor_type type, int length, int64_t* keys) {
 
     epoch_number++;
     // printf("START PREDECESSOR\n");
-    auto id = parlay::tabulate(length, [&](int i) { return i; });
-    parlay::sort_inplace(id, [&](int i, int j) { return keys[i] < keys[j]; });
+    // auto id = parlay::tabulate(length, [&](int i) { return i; });
+    // parlay::sort_inplace(id, [&](int i, int j) { return keys[i] < keys[j]; });
     // for (int i = 0; i < length; i ++) {
     //     printf("%ld\n", keys[i]);
     // }
@@ -114,14 +115,14 @@ void predecessor(predecessor_type type, int length, int64_t* keys) {
                 ((int)i == nr_of_dpus - 1) ? INT64_MAX : key_split[i + 1];
 
             int loop_l = binary_search_local_r(
-                -1, length, [&](int x) { return l <= keys[id[x]]; });
+                -1, length, [&](int x) { return l <= keys[x]; });
             int loop_r = binary_search_local_r(
-                -1, length, [&](int x) { return r <= keys[id[x]]; });
+                -1, length, [&](int x) { return r <= keys[x]; });
 
             // if (r >= keys[id[loop_r]]) loop_r++;
             // printf("%ld\t%ld\t%d\t%d\n", l, r, loop_l, loop_r);
             for (int j = loop_l; j < loop_r; j++) {
-                L3_search_task tst = (L3_search_task){.key = keys[id[j]]};
+                L3_search_task tst = (L3_search_task){.key = keys[j]};
                 push_task(&tst, sizeof(L3_search_task), sizeof(L3_search_reply),
                           i);
             }
@@ -138,24 +139,11 @@ void predecessor(predecessor_type type, int length, int64_t* keys) {
             ASSERT(buffer_state == receive_direct);
             int offset = ll[i] + j;
             ASSERT(offset < rr[i]);
-            op_results[id[offset]] = tsr.result_key;
+            op_results[offset] = tsr.result_key;
         });
         predecessor_L3_get_result.end();
     }
     predecessor_L3.end();
-}
-
-auto deduplication(int64_t *arr, int &length) {  // assume sorted
-    auto seq = parlay::make_slice(arr, arr + length);
-    parlay::sort_inplace(seq);
-
-    auto dup = parlay::delayed_tabulate(
-        length, [&](int i) -> bool { return i == 0 || seq[i] != seq[i - 1]; });
-    auto packed = parlay::pack(seq, dup);
-    length = packed.size();
-    return packed;
-    // length = seq.size();
-    // return seq;
 }
 
 int insert_offset_buffer[BATCH_SIZE * 2];
@@ -165,25 +153,31 @@ timer insert_height("insert_height");
 timer insert_taskgen("insert_taskgen");
 timer insert_exec("insert_exec");
 
-void insert(int length, int64_t* insert_keys, int64_t* insert_values) {
+void insert(int length, insert_task* tasks) {
     // printf("\n********** INIT SKIP LIST **********\n");
 
     // insert_init.start();
 
     printf("\n**** INIT HEIGHT ****\n");
-    parlay::sequence<int64_t> keys;
-    // insert_sort.start();
-    time_nested("sort", [&]() { keys = deduplication(insert_keys, length); });
     epoch_number++;
-    // auto keys = deduplication(insert_keys, length);
-    // insert_sort.end();
 
+    // for (int i = 0; i < length; i += length / 10) {
+    //     printf("%lld\n", insert_keys[i]);
+    // }
     // {
     //     int s = keys.size();
     //     for (int i = 0; i < s; i++) {
     //         printf("%ld\n", keys[i]);
     //     }
     // }
+
+    auto keys = parlay::delayed_tabulate(length, [&](int i) {
+        return tasks[i].key;
+    });
+
+    auto values = parlay::delayed_tabulate(length, [&](int i) {
+        return tasks[i].value;
+    });
 
     // insert_height.start();
     time_nested("init height", [&]() {
@@ -192,10 +186,6 @@ void insert(int length, int64_t* insert_keys, int64_t* insert_values) {
             t = t & (-t);
             int h = __builtin_ctz(t) + 1;
             h = min(h, maxheight);
-            // if (h > maxheight) {
-            //     printf("%ld %d\n", keys[i], h);
-            //     h = maxheight;
-            // }
             insert_heights[i] = h;
         });
     });
@@ -228,25 +218,42 @@ void insert(int length, int64_t* insert_keys, int64_t* insert_values) {
                 }
                 L3_insert_task tit =
                     (L3_insert_task){.key = keys[j],
-                                     .addr = null_pptr,
+                                    //  .addr = null_pptr,
                                      .height = insert_heights[j],
-                                     .value = insert_values[j]};
-                push_task(&tit, sizeof(L3_insert_task), sizeof(L3_insert_reply),
+                                     .value = values[j]};
+                push_task(&tit, sizeof(L3_insert_task), 0,
                           i);
             }
         });
     });
 
-    time_nested("exec", [&]() { exec(); });
+    time_nested("exec", [&]() { !exec(); });
     buffer_state = idle;
 }
 
 timer remove_task_generate("remove_task_generate");
 
+auto deduplication(int64_t *arr, int &length) {  // assume sorted
+    auto seq = parlay::make_slice(arr, arr + length);
+    parlay::sort_inplace(seq);
+
+    auto dup = parlay::delayed_tabulate(
+        length, [&](int i) -> bool { return i == 0 || seq[i] != seq[i - 1]; });
+    auto packed = parlay::pack(seq, dup);
+    length = packed.size();
+    return packed;
+}
+
 void remove(int length, int64_t* remove_keys) {
     remove_task_generate.start();
     epoch_number++;
-    auto keys = deduplication(remove_keys, length);
+
+    // auto keys = deduplication(remove_keys, length);
+    auto keys = parlay::make_slice(remove_keys, length);
+
+    // for (int i = 0; i < length; i += length / 10) {
+    //     printf("%lld\n", remove_keys[i]);
+    // }
 
     init_io_buffer(false);
     set_io_buffer_type(L3_REMOVE_TSK, EMPTY);

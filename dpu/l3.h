@@ -29,9 +29,9 @@ extern __mram_ptr ht_slot l3ht[];
 static inline void L3_init(L3_init_task *tit) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
-    root = get_new_L3(tit->key, tit->value, tit->height, tit->addr, maddr);
-    L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
-    mram_write(&tir, send_task_start, sizeof(L3_init_reply));
+    root = get_new_L3(tit->key, tit->value, tit->height, maddr);
+    // L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
+    // mram_write(&tir, send_task_start, sizeof(L3_init_reply));
 }
 
 static inline int L3_ht_get(ht_slot v, int64_t key) {
@@ -135,8 +135,8 @@ static inline void L3_insert_parallel(int length, int l,
         int64_t key = mram_tit[i].key;
         int64_t height = mram_tit[i].height;
         int64_t value = mram_tit[i].value;
-        pptr addr = mram_tit[i].addr;
-        newnode[i] = (int64_t)get_new_L3(key, value, height, addr, maddr);
+        // pptr addr = mram_tit[i].addr;
+        newnode[i] = (int64_t)get_new_L3(key, value, height, maddr);
         maddr += L3_node_size(height);
         if (height > max_height) {
             max_height = height;
@@ -311,13 +311,13 @@ static inline void L3_insert_parallel(int length, int l,
         }
     }
 
-    __mram_ptr L3_insert_reply *dst =
-        (__mram_ptr L3_insert_reply *)send_task_start;
-    for (int i = 0; i < length; i++) {
-        L3_insert_reply tir = (L3_insert_reply){
-            .addr = (pptr){.id = DPU_ID, .addr = (uint32_t)newnode[i]}};
-        mram_write(&tir, &dst[l + i], sizeof(L3_insert_reply));
-    }
+    // __mram_ptr L3_insert_reply *dst =
+    //     (__mram_ptr L3_insert_reply *)send_task_start;
+    // for (int i = 0; i < length; i++) {
+    //     L3_insert_reply tir = (L3_insert_reply){
+    //         .addr = (pptr){.id = DPU_ID, .addr = (uint32_t)newnode[i]}};
+    //     mram_write(&tir, &dst[l + i], sizeof(L3_insert_reply));
+    // }
 
     // L3_insert_reply *tir = mem_alloc(sizeof(L3_insert_reply) * length);
     // for (int i = 0; i < length; i++) {
