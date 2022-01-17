@@ -19,51 +19,9 @@ extern int64_t epoch_number;
 
 int maxheight; // setting max height
 
-int64_t key_split[MAX_DPU + 10];
-
 enum predecessor_type { predecessor_insert, predecessor_only };
 
-void init_splits() {
-    printf("\n********** INIT SPLITS **********\n");
-    uint64_t split = UINT64_MAX / nr_of_dpus;
-    key_split[0] = INT64_MIN;
-    for (int i = 1; i < nr_of_dpus; i++) {
-        key_split[i] = key_split[i - 1] + split;
-        // cout<<key_split[i]<<endl;
-    }
-    // key_split[nr_of_dpus] = INT64_MAX;
-}
 
-void init_skiplist(uint32_t height) {
-    epoch_number++;
-    maxheight = height;
-
-    printf("\n********** INIT SKIP LIST **********\n");
-
-    // pptr l3node = null_pptr;
-    {
-        init_io_buffer(false);
-        set_io_buffer_type(L3_INIT_TSK, L3_INIT_REP);
-        for (int i = 0; i < nr_of_dpus; i++) {
-            L3_init_task tit = (L3_init_task){
-                .key = key_split[i], .height = height, .value = INT64_MIN};
-            push_task(&tit, sizeof(L3_init_task), 0, i);
-        }
-        ASSERT(!exec());  // insert upper part -INF
-
-        // L3_init_reply _;
-        // apply_to_all_reply(false, _, [&](L3_init_reply &tsr, int i, int j) {
-        //     (void)i;
-        //     (void)j;
-        //     ASSERT(buffer_state == receive_direct);
-        //     if (l3node.id == INVALID_DPU_ID) {
-        //         l3node = tsr.addr;
-        //     } else {
-        //         ASSERT(l3node.addr == tsr.addr.addr);
-        //     }
-        // });
-    }
-}
 
 // void get(int length, int64_t* keys) {
 //     assert(false);
@@ -88,6 +46,7 @@ timer predecessor_L3_task_generate("predecessor_L3_task_generate");
 timer predecessor_L3("predecessor_L3");
 timer predecessor_exec("predecessor_exec");
 timer predecessor_L3_get_result("predecessor_L3_get_result");
+
 void predecessor(predecessor_type type, int length, int64_t* keys) {
     (void)type;
 

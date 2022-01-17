@@ -4,16 +4,13 @@
 #include <mram.h>
 #include <perfcounter.h>
 #include <string.h>
-#include "util.h"
-
-typedef __mram_ptr pptr* mppptr;
-typedef __mram_ptr int64_t* mpint64_t;
+#include "pptr.h"
+#include "macro.h"
 
 typedef struct L3node {
     int64_t key;
     int64_t value;
     int64_t height;
-    // pptr down;
     mppptr left __attribute__((aligned (8)));
     mppptr right __attribute__((aligned (8)));
 } L3node;

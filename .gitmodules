@@ -4,3 +4,6 @@
 [submodule "libcuckoo"]
 	path = libcuckoo
 	url = https://github.com/efficient/libcuckoo.git
+[submodule "pim_base"]
+	path = pim_base
+	url = https://github.com/Loremkang/pim_base.git

@@ -23,27 +23,15 @@
 
 bool print_debug = false;
 
-extern "C" {
-    #include <dpu.h>
-}
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cstdbool>
 #include <iostream>
-#include <set>
-#include <parlay/parallel.h>
-#include <atomic>
-#include "task_host.hpp"
 
-#include "host.hpp"
-// #include "test_framework.hpp"
-#include "test_framework_from_file.hpp"
-#include "operations.hpp"
-#include "timer.hpp"
-#include "util.hpp"
-
+#include "task.hpp"
+#include "task_framework_host.hpp"
+#include "driver.hpp"
 
 #ifndef DPU_BINARY
 #define DPU_BINARY "build/fast_skip_list_dpu"
@@ -54,119 +42,94 @@ extern "C" {
 // #define ANSI_COLOR_RESET "\x1b[0m"
 using namespace std;
 
-dpu_set_t dpu_set;
-struct dpu_set_t dpu;
-uint32_t each_dpu;
-int nr_of_dpus;
-int64_t epoch_number;
-
-int64_t op_keys[BATCH_SIZE];
-int64_t op_results[BATCH_SIZE];
-int32_t op_heights[BATCH_SIZE];
-int32_t insert_heights[BATCH_SIZE];
-pptr op_addrs[BATCH_SIZE];
-pptr op_addrs2[BATCH_SIZE];
-int32_t op_taskpos[BATCH_SIZE];
-
 void init_dpus() {
     printf("\n********** INIT DPUS **********\n");
-    init_io_buffer(false);
-    set_io_buffer_type(INIT_TSK, EMPTY);
-    for (int i = 0; i < nr_of_dpus; i ++) {
-        init_task it = (init_task){.id = i};
-        push_task(&it, sizeof(init_task), 0, i);
-    }
-    ASSERT(!exec());
-}
+    auto io = alloc_io_manager();
+    ASSERT(io == &io_managers[0]);
+    io->init();
+    IO_Task_Batch* batch = io->alloc<dpu_init_task, empty_task_reply>(direct);
 
-// void randint64_test() {
-//     int bins[NR_DPUS];
-//     memset(bins, 0, sizeof(bins));
-//     for (int i = 0; i < 1000000; i ++) {
-//         bins[hash_to_dpu(randint64(parlay::worker_id()), 0, nr_of_dpus)] ++;
-//     }
-//     for (int i = 0; i < nr_of_dpus; i ++) {
-//         printf("%d\n", bins[i]);
-//     }
-// }
+    parlay::parallel_for(0, nr_of_dpus, [&](size_t i) {
+        auto it = (dpu_init_task*)batch->push_task_zero_copy(i, -1, false);
+        *it = (dpu_init_task){.dpu_id = (int64_t)i};
+    });
+    io->finish_task_batch();
+    ASSERT(!io->exec());
+}
 
 /**
  * @brief Main of the Host Application.
  */
-int main() {
-    init_rand();
-
-    timer init_timer("init");
-
-    init_timer.start();
-    DPU_ASSERT(dpu_alloc(DPU_ALLOCATE_ALL, "backend=hw", &dpu_set));
-    DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
-
-    DPU_ASSERT(dpu_get_nr_dpus(dpu_set, (uint32_t *)&nr_of_dpus));
-    printf("Allocated %d DPU(s)\n", nr_of_dpus);
-
-    // randint64_test();
-    // return 0;
-
-    init_io_manager();
-
+int main(int argc, char* argv[]) {
+    driver::init();
+    dpu_control::alloc(DPU_ALLOCATE_ALL);
+    dpu_control::load(DPU_BINARY);
     init_dpus();
+    dpu_control::print_log([&](size_t i) {return true;});
+    return 0;
+    driver::exec(argc, argv);
 
-    init_splits();
-    init_skiplist(19);
-    init_test_framework();
-    init_timer.end();
+    {
+        // init_skiplist(19);
+        // init_test_framework();
+        // init_timer.end();
 
-    bool file_test = true;
-    if (file_test) {
-        int actual_batch_size = 1000000;
+        // bool file_test = true;
+        // if (file_test) {
+        //     int actual_batch_size = 1000000;
 
-        task* tasks;
-        int64_t init_total_length;
-        read_task_file(init_file_name, tasks, init_total_length);
-        ASSERT(init_total_length == 8e8);
+        //     task* tasks;
+        //     int64_t init_total_length;
+        //     read_task_file(init_file_name, tasks, init_total_length);
+        //     ASSERT(init_total_length == 8e8);
 
-        int init_round = 800;
-        execute(tasks, actual_batch_size, init_round);
+        //     int init_round = 800;
+        //     execute(tasks, actual_batch_size, init_round);
 
-        reset_all_timers();
+        //     reset_all_timers();
 
-        int64_t test_total_length;
-        read_task_file(base_dir + "2insert.buffer", tasks, test_total_length);
-        // read_task_file(base_dir + "insert.buffer", tasks, test_total_length);
-        ASSERT(test_total_length == 2e8);
+        //     int64_t test_total_length;
+        //     read_task_file(base_dir + "2insert.buffer", tasks,
+        //     test_total_length);
+        //     // read_task_file(base_dir + "insert.buffer", tasks,
+        //     test_total_length); ASSERT(test_total_length == 2e8);
 
-        total_io = 0;
-        int test_round = 200;
-        execute(tasks, actual_batch_size, test_round);
-        cout<<"total io: "<<total_io<<endl;
-    } else {
-        // turnon_all_timers(false);
+        //     total_io = 0;
+        //     int test_round = 200;
+        //     execute(tasks, actual_batch_size, test_round);
+        //     cout<<"total io: "<<total_io<<endl;
+        // } else {
+        //     // turnon_all_timers(false);
 
-        // int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
+        //     // int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
 
-        // bool check_result = false;
+        //     // bool check_result = false;
 
-        // for (int i = 0; i < 100; i++) {
-        //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+        //     // for (int i = 0; i < 100; i++) {
+        //     //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+        //     // }
+
+        //     // turnon_all_timers(true);
+
+        //     // for (int i = 0; i < 100; i++) {
+        //     //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
+        //     //     assert(
+        //     //         predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU,
+        //     check_result));
+        //     // }
         // }
-
-        // turnon_all_timers(true);
-
-        // for (int i = 0; i < 100; i++) {
-        //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
-        //     assert(
-        //         predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result));
-        // }
+        // print_all_timers(pt_full);
+        // print_all_timers(pt_succinct_time);
+        // print_all_timers(pt_name);
+        // // init_timer.print();
+        // // insert_timer.print();
+        // // predecessor_timer.print();
+        // // remove_timer.print();
+        // // L3_sancheck();
+        // DPU_ASSERT(dpu_free(dpu_set));
+        // return 0;
     }
-    print_all_timers(pt_full);
-    print_all_timers(pt_succinct_time);
-    print_all_timers(pt_name);
-    // init_timer.print();
-    // insert_timer.print();
-    // predecessor_timer.print();
-    // remove_timer.print();
-    // L3_sancheck();
-    DPU_ASSERT(dpu_free(dpu_set));
+
+    dpu_control::free();
     return 0;
 }
