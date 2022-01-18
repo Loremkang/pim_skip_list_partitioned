@@ -3,13 +3,22 @@
 #include <mram.h>
 
 #include "macro.h"
+#include "common.h"
+#include "hashtable_l3size.h"
 
 __host mpuint8_t wram_heap_save_addr = NULL_pt(mpuint8_t);
 
+// only top 2 inited because of task_framework_dpu.h
 __mram_noinit int64_t
     send_varlen_offset_tmp[NR_TASKLETS][MAX_TASK_COUNT_PER_TASKLET_PER_BLOCK];
 __mram_noinit uint8_t
     send_varlen_buffer_tmp[NR_TASKLETS][MAX_TASK_BUFFER_SIZE_PER_TASKLET];
+
+__mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
+__host int l3htcnt = 0;
+__mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
+__host int l3cnt = 8;
+__host mL3ptr root;
 
 // dpu.c
 int64_t DPU_ID;  // = -1;
@@ -48,9 +57,12 @@ void wram_heap_init() {
 
 void wram_heap_load() {
     mpuint8_t saveAddr = wram_heap_save_addr;
-    if (saveAddr == NULL_pt(mpuint8_t))
+    if (saveAddr == NULL_pt(mpuint8_t)) {
+        // printf("%d\n", (int)send_varlen_buffer_tmp);
+        // exit(0);
+        // EXIT();
         wram_heap_init();
-    else {
+    } else {
         WRAMHeap heapInfo;
         mram_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
         DPU_ID = heapInfo.DPU_ID;

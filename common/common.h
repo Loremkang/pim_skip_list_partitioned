@@ -7,13 +7,38 @@
 
 #define TASK_TYPE (7)
 
+#define DB_SIZE (16)
+
 /* Size of the buffer on which the checksum will be performed */
 // #define BUFFER_SIZE (200)
-// #define LOWER_PART_HEIGHT (6)
 #define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)
 
 // L0,1,2,3 50MB
-#define LX_BUFFER_SIZE (45 << 20)
+#define LX_BUFFER_SIZE (40 << 20)
 
 // HASH TABLE 8MB. should be power of 2
 #define LX_HASHTABLE_SIZE ((8 << 20) >> 3)
+
+static inline int hh(int64_t key, uint64_t height, uint64_t M) {
+    // assert(height == 0);
+    // printf("KEY: %lld\n", key);
+    key = (key % M);
+    // printf("KEY: %lld\n", key);
+    key = (key < 0) ? (key + M) : key;
+    // printf("KEY: %lld\n", key);
+    key = key * 47 + height;
+    // printf("KEY: %lld\n", key);
+    return (key * 23 + 17) % M;
+}
+
+static inline int hash_to_dpu(int64_t key, uint64_t height, uint64_t M) {
+    return hh(key, height, M);
+}
+
+static inline int lb(int64_t x) { return x & (-x); }
+
+static inline int hh_dpu(int64_t key, uint64_t M) { return key & (M - 1); }
+
+static inline int hash_to_addr(int64_t key, uint64_t M) {
+    return hh_dpu(key, M);
+}

@@ -65,10 +65,7 @@ uint32_t *newnode_size;
 
 // Node Buffers & Hash Tables
 // L3
-__mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
-__host int l3htcnt = 0;
-__mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
-__host int l3cnt = 8;
+
 
 __host mL3ptr root;
 
@@ -130,10 +127,6 @@ void execute(int l, int r) {
             __mram_ptr L3_insert_task* mram_tit =
                 (__mram_ptr L3_insert_task*)receive_task_start;
             mram_tit += l;
-
-            // seqreader_buffer_t local_cache = seqread_alloc();
-            // seqreader_t sr;
-            // L3_insert_task* tit = seqread_init(local_cache, mram_tit, &sr);
 
             newnode_size[tasklet_id] = 0;
             for (int i = 0; i < length; i++) {

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <stdlib.h>
+#include <mutex.h>
 #include "common.h"
 #include "node_dpu.h"
-#include "task_framework_dpu.h"
+// #include "task_framework_dpu.h"
 // #include "garbage_collection.h"
 
 typedef struct ht_slot {
@@ -92,7 +93,7 @@ static inline void ht_delete(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
 
 static inline uint32_t ht_search(__mram_ptr ht_slot* ht, int64_t key,
                                  int (*filter)(ht_slot, int64_t)) {
-    int ipos = hash_to_addr(key, 0, LX_HASHTABLE_SIZE);
+    int ipos = hash_to_addr(key, LX_HASHTABLE_SIZE);
     int pos = ipos;
     while (true) {
         ht_slot hs = ht[pos];  // pull to wram
@@ -143,7 +144,7 @@ static inline mL3ptr get_new_L3(int64_t key, int64_t value, int height, __mram_p
     uint8_t buffer[sizeof(L3node) + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, value, height, buffer, maddr);
     mram_write((void*)nn, maddr, size);
-    ht_insert(l3ht, &l3htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
+    ht_insert(l3ht, &l3htcnt, hash_to_addr(key, LX_HASHTABLE_SIZE),
               (uint32_t)maddr);
-    return maddr;
+    return (mL3ptr)maddr;
 }

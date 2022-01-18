@@ -65,8 +65,7 @@ int main(int argc, char* argv[]) {
     dpu_control::alloc(DPU_ALLOCATE_ALL);
     dpu_control::load(DPU_BINARY);
     init_dpus();
-    dpu_control::print_log([&](size_t i) {return true;});
-    return 0;
+    // dpu_control::print_all_log();
     driver::exec(argc, argv);
 
     {

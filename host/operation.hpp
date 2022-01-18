@@ -11,6 +11,7 @@ using namespace parlay;
 class pim_skip_list {
    public:
     static int64_t key_split[NR_DPUS + 10];
+    static int max_height;
 
    private:
     static void init_splits() {
@@ -35,7 +36,9 @@ class pim_skip_list {
         batch->push_task_sorted(
             nr_of_dpus, nr_of_dpus,
             [&](size_t i) {
-                return (L3_init_task){{.key = key_split[i], .value = INT64_MIN}};
+                return (L3_init_task){{.key = key_split[i],
+                                       .value = INT64_MIN,
+                                       .height = max_height}};
             },
             [&](size_t i) { return i; }, make_slice(location));
         io->finish_task_batch();
@@ -106,7 +109,9 @@ class pim_skip_list {
             batch = io->alloc<L3_search_task, L3_search_reply>(direct);
             batch->push_task_sorted(
                 n, nr_of_dpus,
-                [&](size_t i) { return (L3_search_task){.key = keys_sorted[i]}; },
+                [&](size_t i) {
+                    return (L3_search_task){.key = keys_sorted[i]};
+                },
                 [&](size_t i) { return target[i]; }, make_slice(location));
             io->finish_task_batch();
         });
@@ -114,7 +119,9 @@ class pim_skip_list {
         time_nested("exec", [&]() { ASSERT(io->exec()); });
         auto result = parlay::tabulate(n, [&](size_t i) {
             auto reply = (L3_search_reply*)batch->ith(target[i], location[i]);
-            return make_pair(keys_with_offset[i].first, (key_value){.key = reply->key, .value = reply->value});
+            return make_pair(
+                keys_with_offset[i].first,
+                (key_value){.key = reply->key, .value = reply->value});
         });
         io->reset();
         auto ret = parlay::sort(
@@ -142,6 +149,17 @@ class pim_skip_list {
             find_target(make_slice(keys_sorted), make_slice(target));
         });
 
+        auto heights = parlay::sequence<int>(n);
+        time_nested("init height", [&]() {
+            parlay::parallel_for(0, n, [&](size_t i) {
+                int32_t t = rn_gen::parallel_rand();
+                t = t & (-t);
+                int h = __builtin_ctz(t) + 1;
+                h = min(h, max_height);
+                heights[i] = h;
+            });
+        });
+
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
             io = alloc_io_manager();
@@ -151,8 +169,9 @@ class pim_skip_list {
             batch->push_task_sorted(
                 n, nr_of_dpus,
                 [&](size_t i) {
-                    return (L3_insert_task){
-                        {.key = kv_sorted[i].key, .value = kv_sorted[i].value}};
+                    return (L3_insert_task){{.key = kv_sorted[i].key,
+                                             .value = kv_sorted[i].value,
+                                             .height = heights[i]}};
                 },
                 [&](size_t i) { return target[i]; }, make_slice(location));
             io->finish_task_batch();
@@ -183,7 +202,9 @@ class pim_skip_list {
             batch = io->alloc<L3_remove_task, empty_task_reply>(direct);
             batch->push_task_sorted(
                 n, nr_of_dpus,
-                [&](size_t i) { return (L3_remove_task){.key = keys_sorted[i]}; },
+                [&](size_t i) {
+                    return (L3_remove_task){.key = keys_sorted[i]};
+                },
                 [&](size_t i) { return target[i]; }, make_slice(location));
             io->finish_task_batch();
         });
@@ -194,3 +215,4 @@ class pim_skip_list {
 };
 
 int64_t pim_skip_list::key_split[NR_DPUS + 10];
+int pim_skip_list::max_height = 19;

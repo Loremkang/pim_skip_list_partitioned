@@ -1,8 +1,9 @@
 #pragma once
 
 #include "common.h"
-#include "task_dpu.h"
-#include "storage.h"
+#include "task_framework_dpu.h"
+// #include "storage.h"
+#include "hashtable_l3size.h"
 #include <barrier.h>
 #include <alloc.h>
 // #include <profiling.h>
@@ -12,26 +13,16 @@
 // PROFILING_INIT(prof_external);
 // PROFILING_INIT(prof_finish);
 
-
-// BARRIER_INIT(L3_barrier, NR_TASKLETS);
-
-// extern volatile int host_barrier;
 BARRIER_INIT(L3_barrier, NR_TASKLETS);
 MUTEX_INIT(L3_lock);
-// extern const mutex_id_t L3_lock;
 
-// extern int NR_TASKLETS;
-
-extern int64_t DPU_ID, dpu_epoch_number;
-extern __mram_ptr uint8_t* send_task_start;
+extern int64_t DPU_ID;
 extern __mram_ptr ht_slot l3ht[]; 
 
-static inline void L3_init(L3_init_task *tit) {
+static inline void L3_init(int64_t key, int64_t value, int height) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
-    __mram_ptr void* maddr = reserve_space_L3(L3_node_size(tit->height));
-    root = get_new_L3(tit->key, tit->value, tit->height, maddr);
-    // L3_init_reply tir = (L3_init_reply){.addr = (pptr){.id = DPU_ID, .addr = (uint32_t)root}};
-    // mram_write(&tir, send_task_start, sizeof(L3_init_reply));
+    __mram_ptr void* maddr = reserve_space_L3(L3_node_size(height));
+    root = get_new_L3(key, value, height, maddr);
 }
 
 static inline int L3_ht_get(ht_slot v, int64_t key) {
@@ -45,19 +36,19 @@ static inline int L3_ht_get(ht_slot v, int64_t key) {
     return 0;
 }
 
-static inline void L3_get(int64_t key, int i) {
+static inline bool L3_get(int64_t key, int64_t* value) {
     uint32_t htv = ht_search(l3ht, key, L3_ht_get);
     // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
-    L3_get_reply tgr =
-        (L3_get_reply){//.key = key,
-                       //.addr = (pptr){.id = DPU_ID, .addr = htv},
-                       .available = (htv != INVALID_DPU_ADDR) ? 1 : 0};
-    __mram_ptr L3_get_reply* dst = (__mram_ptr L3_get_reply*)send_task_start;
-    mram_write(&tgr, &dst[i], sizeof(L3_get_reply));
+    if (htv == INVALID_DPU_ADDR) {
+        return false;
+    }
+    mL3ptr nn = (mL3ptr)htv;
+    *value = nn->value;
+    return true;
 }
 
 static inline int64_t L3_search(int64_t key, int record_height,
-                                mL3ptr *rightmost, int64_t* value) {
+                                mL3ptr *rightmost, int64_t *value) {
     mL3ptr tmp = root;
     int64_t ht = root->height - 1;
     while (ht >= 0) {
@@ -106,10 +97,12 @@ static inline void L3_insert_parallel(int length, int l,
                                       int8_t *max_height_shared,
                                       mL3ptr *right_predecessor_shared,
                                       mL3ptr *right_newnode_shared) {
+    const uint32_t OLD_NODES_DPU_ID = (uint32_t)-2;
     uint32_t tasklet_id = me();
     int8_t max_height = 0;
-    __mram_ptr int64_t* newnode = &newnode_buffer[l];
-    IN_DPU_ASSERT(l + length < L3_TEMP_BUFFER_SIZE, "L3 insert parallel: new node buffer overflow");
+    __mram_ptr int64_t *newnode = &newnode_buffer[l];
+    IN_DPU_ASSERT(l + length < L3_TEMP_BUFFER_SIZE,
+                  "L3 insert parallel: new node buffer overflow");
     // mL3ptr *newnode = mem_alloc(sizeof(mL3ptr) * length);
 
     barrier_wait(&L3_barrier);
@@ -119,9 +112,9 @@ static inline void L3_insert_parallel(int length, int l,
             newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
         }
         // if (l3cnt >= LX_BUFFER_SIZE) {
-            // for (int i = 0; i < NR_TASKLETS; i++) {
-            //     printf("%d\n", newnode_size[i]);
-            // }
+        // for (int i = 0; i < NR_TASKLETS; i++) {
+        //     printf("%d\n", newnode_size[i]);
+        // }
         // }
         // EXIT();
         IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
@@ -199,8 +192,8 @@ static inline void L3_insert_parallel(int length, int l,
                 //     (pptr){.id = DPU_ID, .addr =
                 //     (uint32_t)right_newnode[ht]};
 
-                nn->left[ht] = (pptr){
-                    .id = OLD_NODES_DPU_ID, .addr = (uint32_t)predecessor[ht]};
+                nn->left[ht] = (pptr){.id = OLD_NODES_DPU_ID,
+                                      .addr = (uint32_t)predecessor[ht]};
                 // predecessor[ht]->right[ht] =
                 //     (pptr){.id = DPU_ID, .addr = (uint32_t)newnode[i]};
             }
@@ -296,17 +289,13 @@ static inline void L3_insert_parallel(int length, int l,
         for (int ht = 0; ht < height; ht++) {
             if (nn->left[ht].id == OLD_NODES_DPU_ID) {
                 mL3ptr ln = (mL3ptr)nn->left[ht].addr;
-                nn->left[ht] =
-                    (pptr){.id = DPU_ID, .addr = (uint32_t)ln};
-                ln->right[ht] =
-                    (pptr){.id = DPU_ID, .addr = (uint32_t)nn};
+                nn->left[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)ln};
+                ln->right[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)nn};
             }
             if (nn->right[ht].id == OLD_NODES_DPU_ID) {
                 mL3ptr rn = (mL3ptr)nn->right[ht].addr;
-                nn->right[ht] =
-                    (pptr){.id = DPU_ID, .addr = (uint32_t)rn};
-                rn->left[ht] =
-                    (pptr){.id = DPU_ID, .addr = (uint32_t)nn};
+                nn->right[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)rn};
+                rn->left[ht] = (pptr){.id = DPU_ID, .addr = (uint32_t)nn};
             }
         }
     }
@@ -423,7 +412,7 @@ static inline void L3_remove_parallel(int length, int l,
     for (int i = 0; i < length; i++) {
         if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
             int64_t key = mram_trt[i].key;
-            ht_delete(l3ht, &l3htcnt, hash_to_addr(key, 0, LX_HASHTABLE_SIZE),
+            ht_delete(l3ht, &l3htcnt, hash_to_addr(key, LX_HASHTABLE_SIZE),
                       (uint32_t)nodes[i]);
         }
     }
