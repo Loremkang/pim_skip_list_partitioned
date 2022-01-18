@@ -122,6 +122,7 @@ static inline void L3_insert_parallel(int length, int l,
 
     barrier_wait(&L3_barrier);
 
+    // EXIT();
     __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
 
     for (int i = 0; i < length; i++) {

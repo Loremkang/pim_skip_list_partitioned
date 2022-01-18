@@ -10,7 +10,10 @@ using namespace parlay;
 
 class pim_skip_list {
    public:
-    static int64_t key_split[NR_DPUS + 10];
+    // static int64_t key_split[NR_DPUS + 10];
+    static parlay::sequence<int64_t> key_split;
+    static parlay::sequence<int64_t> min_key;
+    // static int64_t min_key[NR_DPUS + 10];
     static int max_height;
 
    private:
@@ -22,6 +25,10 @@ class pim_skip_list {
             key_split[i] = key_split[i - 1] + split;
             // cout<<key_split[i]<<endl;
         }
+        for (int i = 0; i < nr_of_dpus - 1; i ++) {
+            min_key[i] = key_split[i + 1];
+        }
+        min_key[nr_of_dpus - 1] = INT64_MAX;
         // key_split[nr_of_dpus] = INT64_MAX;
     }
 
@@ -49,22 +56,42 @@ class pim_skip_list {
    public:
     static void init() {
         // init_dpus();
-        init_splits();
-        init_skiplist();
+        // init_splits();
+        time_nested("init splits", init_splits);
+        time_nested("init_skiplist", init_skiplist);
+        // init_skiplist();
     }
 
-    template <typename T1, typename T2>
-    static void find_target(T1 in, T2 target) {
+    static int64_t find_target(int64_t key, slice<int64_t*, int64_t*> target) {
+        int l = 0, r = nr_of_dpus;
+        while (r - l > 1) {
+            int mid = (l + r) >> 1;
+            if (target[mid] <= key) {
+                l = mid;
+            } else {
+                r = mid;
+            }
+        }
+        return l;
+    }
+
+    template <typename IntIterator1, typename IntIterator2,
+              typename IntIterator3>
+    static void find_targets(slice<IntIterator1, IntIterator1> in,
+                            slice<IntIterator2, IntIterator2> target,
+                            slice<IntIterator3, IntIterator3> split) {
         int n = in.size();
         int j = 0;
         for (int i = 0; i < n; i++) {
-            while (in[i] <= key_split[j]) {
+            while (j < nr_of_dpus && split[j] <= in[i]) {
                 j++;
             }
             target[i] = j - 1;
-            ASSERT(target[i] > 0);
+            ASSERT(target[i] >= 0);
         }
     }
+
+
 
     static auto get(slice<int64_t*, int64_t*> ops) {
         assert(false);
@@ -98,7 +125,7 @@ class pim_skip_list {
 
         auto target = parlay::sequence<int>(n);
         time_nested("find", [&]() {
-            find_target(make_slice(keys_sorted), make_slice(target));
+            find_targets(make_slice(keys_sorted), make_slice(target), make_slice(min_key));
         });
 
         auto location = parlay::sequence<int>(n);
@@ -120,7 +147,7 @@ class pim_skip_list {
         auto result = parlay::tabulate(n, [&](size_t i) {
             auto reply = (L3_search_reply*)batch->ith(target[i], location[i]);
             return make_pair(
-                keys_with_offset[i].first,
+                keys_with_offset_sorted[i].first,
                 (key_value){.key = reply->key, .value = reply->value});
         });
         io->reset();
@@ -146,7 +173,7 @@ class pim_skip_list {
 
         auto target = parlay::sequence<int>(n);
         time_nested("find", [&]() {
-            find_target(make_slice(keys_sorted), make_slice(target));
+            find_targets(make_slice(keys_sorted), make_slice(target), make_slice(key_split));
         });
 
         auto heights = parlay::sequence<int>(n);
@@ -176,10 +203,34 @@ class pim_skip_list {
                 [&](size_t i) { return target[i]; }, make_slice(location));
             io->finish_task_batch();
         });
-        time_nested("exec", [&]() { ASSERT(!io->exec()); });
+
+        time_nested("taskgen2", [&]() {
+            batch = io->alloc<L3_get_min_task, L3_get_min_reply>(direct);
+            batch->push_task_sorted(
+                nr_of_dpus, nr_of_dpus,
+                [&](size_t i) {
+                    (void)i;
+                    return (L3_get_min_task){.key = 0};
+                },
+                [&](size_t i) { return i; },
+                make_slice(location).cut(0, nr_of_dpus));
+            io->finish_task_batch();
+        });
+
+        time_nested("exec", [&]() { ASSERT(io->exec()); });
+
+        time_nested("result", [&]() {
+            for (int i = 0; i < nr_of_dpus; i++) {
+                auto rep = (L3_get_min_reply*)batch->ith(i, 0);
+                assert(rep->key <= min_key[i]);
+                min_key[i] = rep->key;
+            }
+        });
+
         io->reset();
         return;
     }
+
     static void remove(slice<int64_t*, int64_t*> keys) {
         int n = keys.size();
 
@@ -191,7 +242,8 @@ class pim_skip_list {
 
         auto target = parlay::sequence<int>(n);
         time_nested("find", [&]() {
-            find_target(make_slice(keys_sorted), make_slice(target));
+            find_targets(make_slice(keys_sorted), make_slice(target),
+                        make_slice(key_split));
         });
 
         auto location = parlay::sequence<int>(n);
@@ -214,5 +266,7 @@ class pim_skip_list {
     }
 };
 
-int64_t pim_skip_list::key_split[NR_DPUS + 10];
+parlay::sequence<int64_t> pim_skip_list::key_split(NR_DPUS + 10);
+parlay::sequence<int64_t> pim_skip_list::min_key(NR_DPUS + 10);
+// int64_t pim_skip_list::key_split[NR_DPUS + 10];
 int pim_skip_list::max_height = 19;

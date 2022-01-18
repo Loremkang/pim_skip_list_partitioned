@@ -48,6 +48,7 @@ uint32_t *newnode_size;
 static inline void dpu_init(dpu_init_task *it) {
     DPU_ID = it->dpu_id;
     l3cnt = 8;
+    storage_init();
     // printf("id=%d\n", (int)DPU_ID);
     // printf("size=%d\n", sizeof(L3node));
     // storage_init();
@@ -137,6 +138,15 @@ void exec_L3_remove_task(int lft, int rt) {
                         left_node_shared);
 }
 
+void exec_L3_get_min_task(int lft, int rt) {
+    (void)lft; (void)rt;
+    init_block_with_type(L3_get_min_task, L3_get_min_reply);
+    pptr r_first = root->right[0];
+    mL3ptr nn = (mL3ptr)r_first.addr;
+    L3_get_min_reply tgmr = (L3_get_min_reply){.key = nn->key};
+    push_fixed_reply(0, &tgmr);
+}
+
 void execute(int lft, int rt) {
     uint32_t tid = me();
     switch (recv_block_task_type) {
@@ -162,6 +172,10 @@ void execute(int lft, int rt) {
         }
         case L3_remove_task_id: {
             exec_L3_remove_task(lft, rt);
+            break;
+        }
+        case L3_get_min_task_id: {
+            exec_L3_get_min_task(lft, rt);
             break;
         }
         default: {

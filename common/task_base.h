@@ -59,6 +59,14 @@ TASK(L3_update_task, 8, true, sizeof(L3_update_task), {
     int64_t value;
 })
 
+TASK(L3_get_min_task, 9, true, sizeof(L3_get_min_task), {
+    int64_t key;
+})
+
+TASK(L3_get_min_reply, 10, true, sizeof(L3_get_min_reply), {
+    int64_t key;
+})
+
 TASK(dpu_init_task, 501, true, sizeof(dpu_init_task), {
     int64_t dpu_id;
 })
