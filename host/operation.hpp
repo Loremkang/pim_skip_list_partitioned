@@ -62,7 +62,7 @@ class pim_skip_list {
         // init_skiplist();
     }
 
-    static int64_t find_target(int64_t key, slice<int64_t*, int64_t*> target) {
+    static int find_target(int64_t key, slice<int64_t*, int64_t*> target) {
         int l = 0, r = nr_of_dpus;
         while (r - l > 1) {
             int mid = (l + r) >> 1;
@@ -108,25 +108,21 @@ class pim_skip_list {
     }
     static auto predecessor(slice<int64_t*, int64_t*> keys) {
         int n = keys.size();
-        auto keys_with_offset = parlay::delayed_seq<pair<int, int64_t>>(
-            n, [&](size_t i) { return make_pair(i, keys[i]); });
-        parlay::sequence<pair<int, int64_t>> keys_with_offset_sorted;
+        auto splits = make_slice(min_key);
 
-        time_nested("sort", [&]() {
-            keys_with_offset_sorted = parlay::sort(
-                keys_with_offset,
-                [](auto t1, auto t2) { return t1.second < t2.second; });
+        time_start("find_target");
+        auto target = parlay::tabulate(n, [&](size_t i) {
+            return find_target(keys[i], splits);
         });
-        auto keys_sorted = parlay::delayed_seq<int64_t>(
-            n, [&](size_t i) { return keys_with_offset_sorted[i].second; });
+        time_end("find_target");
+
+        // for (int i = 0; i < 100; i ++) {
+        //     printf("query=%lld\npos=%d\nsplit=%lld\n\n", keys[i], target[i], splits[target[i]]);
+        // }
+        // exit(0);
 
         IO_Manager* io;
         IO_Task_Batch* batch;
-
-        auto target = parlay::sequence<int>(n);
-        time_nested("find", [&]() {
-            find_targets(make_slice(keys_sorted), make_slice(target), make_slice(min_key));
-        });
 
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
@@ -134,26 +130,24 @@ class pim_skip_list {
             ASSERT(io == &io_managers[0]);
             io->init();
             batch = io->alloc<L3_search_task, L3_search_reply>(direct);
-            batch->push_task_sorted(
-                n, nr_of_dpus,
-                [&](size_t i) {
-                    return (L3_search_task){.key = keys_sorted[i]};
-                },
-                [&](size_t i) { return target[i]; }, make_slice(location));
+            time_nested("push_task", [&]() {
+                batch->push_task_from_array_by_isort<false>(
+                    n,
+                    [&](size_t i) { return (L3_search_task){.key = keys[i]}; },
+                    make_slice(target), make_slice(location));
+            });
             io->finish_task_batch();
         });
 
         time_nested("exec", [&]() { ASSERT(io->exec()); });
+        time_start("get_result");
         auto result = parlay::tabulate(n, [&](size_t i) {
             auto reply = (L3_search_reply*)batch->ith(target[i], location[i]);
-            return make_pair(
-                keys_with_offset_sorted[i].first,
-                (key_value){.key = reply->key, .value = reply->value});
+            return (key_value){.key = reply->key, .value = reply->value};
         });
+        time_end("get_result");
         io->reset();
-        auto ret = parlay::sort(
-            result, [](auto t1, auto t2) { return t1.first < t2.first; });
-        return parlay::tabulate(n, [&](size_t i) { return ret[i].second; });
+        return result;
     }
 
     static void insert(slice<key_value*, key_value*> kvs) {
@@ -173,7 +167,8 @@ class pim_skip_list {
 
         auto target = parlay::sequence<int>(n);
         time_nested("find", [&]() {
-            find_targets(make_slice(keys_sorted), make_slice(target), make_slice(key_split));
+            find_targets(make_slice(keys_sorted), make_slice(target),
+                         make_slice(key_split));
         });
 
         auto heights = parlay::sequence<int>(n);
@@ -243,7 +238,7 @@ class pim_skip_list {
         auto target = parlay::sequence<int>(n);
         time_nested("find", [&]() {
             find_targets(make_slice(keys_sorted), make_slice(target),
-                        make_slice(key_split));
+                         make_slice(key_split));
         });
 
         auto location = parlay::sequence<int>(n);
