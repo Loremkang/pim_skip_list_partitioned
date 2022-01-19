@@ -19,6 +19,8 @@ class pim_skip_list {
    private:
     static void init_splits() {
         printf("\n********** INIT SPLITS **********\n");
+        key_split = parlay::sequence<int64_t>(nr_of_dpus);
+        min_key = parlay::sequence<int64_t>(nr_of_dpus);
         uint64_t split = UINT64_MAX / nr_of_dpus;
         key_split[0] = INT64_MIN;
         for (int i = 1; i < nr_of_dpus; i++) {
@@ -62,8 +64,9 @@ class pim_skip_list {
         // init_skiplist();
     }
 
-    static int find_target(int64_t key, slice<int64_t*, int64_t*> target) {
-        int l = 0, r = nr_of_dpus;
+    template<typename I64Iterator>
+    static int find_target(int64_t key, slice<I64Iterator, I64Iterator> target) {
+        int l = 0, r = target.size();
         while (r - l > 1) {
             int mid = (l + r) >> 1;
             if (target[mid] <= key) {
@@ -81,17 +84,30 @@ class pim_skip_list {
                             slice<IntIterator2, IntIterator2> target,
                             slice<IntIterator3, IntIterator3> split) {
         int n = in.size();
-        int j = 0;
-        for (int i = 0; i < n; i++) {
-            while (j < nr_of_dpus && split[j] <= in[i]) {
-                j++;
+        parlay::sequence<int> starts(nr_of_dpus, 0);
+        time_nested("bs", [&]() {
+            parallel_for(0, nr_of_dpus, [&](size_t i) {
+                starts[i] = find_target(split[i], in);
+                while (in[starts[i]] < split[i]) {
+                    starts[i]++;
+                }
+                target[starts[i]] = i;
+            }, 1024 / log2_up(n));
+        });
+        for (int i = 1; i < n; i++) {
+            if (target[i] == 0) {
+                target[i] = target[i - 1];
             }
-            target[i] = j - 1;
-            ASSERT(target[i] >= 0);
         }
+        // int j = 0;
+        // for (int i = 0; i < n; i++) {
+        //     while (j < nr_of_dpus && split[j] <= in[i]) {
+        //         j++;
+        //     }
+        //     target[i] = j - 1;
+        //     ASSERT(target[i] >= 0);
+        // }
     }
-
-
 
     static auto get(slice<int64_t*, int64_t*> ops) {
         assert(false);
@@ -111,13 +127,13 @@ class pim_skip_list {
         auto splits = make_slice(min_key);
 
         time_start("find_target");
-        auto target = parlay::tabulate(n, [&](size_t i) {
-            return find_target(keys[i], splits);
-        });
+        auto target = parlay::tabulate(
+            n, [&](size_t i) { return find_target(keys[i], splits); });
         time_end("find_target");
 
         // for (int i = 0; i < 100; i ++) {
-        //     printf("query=%lld\npos=%d\nsplit=%lld\n\n", keys[i], target[i], splits[target[i]]);
+        //     printf("query=%lld\npos=%d\nsplit=%lld\n\n", keys[i], target[i],
+        //     splits[target[i]]);
         // }
         // exit(0);
 
@@ -165,7 +181,7 @@ class pim_skip_list {
         IO_Manager* io;
         IO_Task_Batch* batch;
 
-        auto target = parlay::sequence<int>(n);
+        auto target = parlay::sequence<int>(n, 0);
         time_nested("find", [&]() {
             find_targets(make_slice(keys_sorted), make_slice(target),
                          make_slice(key_split));
@@ -235,7 +251,7 @@ class pim_skip_list {
         IO_Manager* io;
         IO_Task_Batch* batch;
 
-        auto target = parlay::sequence<int>(n);
+        auto target = parlay::sequence<int>(n, 0);
         time_nested("find", [&]() {
             find_targets(make_slice(keys_sorted), make_slice(target),
                          make_slice(key_split));
@@ -261,7 +277,7 @@ class pim_skip_list {
     }
 };
 
-parlay::sequence<int64_t> pim_skip_list::key_split(NR_DPUS + 10);
-parlay::sequence<int64_t> pim_skip_list::min_key(NR_DPUS + 10);
+parlay::sequence<int64_t> pim_skip_list::key_split;
+parlay::sequence<int64_t> pim_skip_list::min_key;
 // int64_t pim_skip_list::key_split[NR_DPUS + 10];
 int pim_skip_list::max_height = 19;
