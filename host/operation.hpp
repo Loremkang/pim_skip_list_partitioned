@@ -86,19 +86,26 @@ class pim_skip_list {
         int n = in.size();
         parlay::sequence<int> starts(nr_of_dpus, 0);
         time_nested("bs", [&]() {
-            parallel_for(0, nr_of_dpus, [&](size_t i) {
-                starts[i] = find_target(split[i], in);
-                while (in[starts[i]] < split[i]) {
-                    starts[i]++;
-                }
-                target[starts[i]] = i;
-            }, 1024 / log2_up(n));
+            parallel_for(
+                0, nr_of_dpus,
+                [&](size_t i) {
+                    starts[i] = find_target(split[i], in);
+                    while (starts[i] < n && in[starts[i]] < split[i]) {
+                        starts[i]++;
+                    }
+                    if (starts[i] < n) {
+                        target[starts[i]] = i;
+                    }
+                },
+                1024 / log2_up(n));
         });
-        for (int i = 1; i < n; i++) {
-            if (target[i] == 0) {
-                target[i] = target[i - 1];
-            }
-        }
+        parlay::scan_inclusive_inplace(target, parlay::maxm<int>());
+        // parlay::scan_inplace(target, );
+        // for (int i = 1; i < n; i++) {
+        //     if (target[i] == 0) {
+        //         target[i] = target[i - 1];
+        //     }
+        // }
         // int j = 0;
         // for (int i = 0; i < n; i++) {
         //     while (j < nr_of_dpus && split[j] <= in[i]) {
