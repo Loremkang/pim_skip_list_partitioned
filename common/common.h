@@ -5,10 +5,6 @@
 
 #define MAX_L3_HEIGHT (20)
 
-#define TASK_TYPE (7)
-
-#define DB_SIZE (16)
-
 /* Size of the buffer on which the checksum will be performed */
 // #define BUFFER_SIZE (200)
 #define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)

@@ -68,67 +68,6 @@ int main(int argc, char* argv[]) {
     // dpu_control::print_all_log();
     driver::exec(argc, argv);
 
-    {
-        // init_skiplist(19);
-        // init_test_framework();
-        // init_timer.end();
-
-        // bool file_test = true;
-        // if (file_test) {
-        //     int actual_batch_size = 1000000;
-
-        //     task* tasks;
-        //     int64_t init_total_length;
-        //     read_task_file(init_file_name, tasks, init_total_length);
-        //     ASSERT(init_total_length == 8e8);
-
-        //     int init_round = 800;
-        //     execute(tasks, actual_batch_size, init_round);
-
-        //     reset_all_timers();
-
-        //     int64_t test_total_length;
-        //     read_task_file(base_dir + "2insert.buffer", tasks,
-        //     test_total_length);
-        //     // read_task_file(base_dir + "insert.buffer", tasks,
-        //     test_total_length); ASSERT(test_total_length == 2e8);
-
-        //     total_io = 0;
-        //     int test_round = 200;
-        //     execute(tasks, actual_batch_size, test_round);
-        //     cout<<"total io: "<<total_io<<endl;
-        // } else {
-        //     // turnon_all_timers(false);
-
-        //     // int BATCH_SIZE_PER_DPU = 1000000 / MAX_DPU;
-
-        //     // bool check_result = false;
-
-        //     // for (int i = 0; i < 100; i++) {
-        //     //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
-        //     // }
-
-        //     // turnon_all_timers(true);
-
-        //     // for (int i = 0; i < 100; i++) {
-        //     //     insert_test(BATCH_SIZE_PER_DPU * MAX_DPU, check_result);
-        //     //     assert(
-        //     //         predecessor_test(BATCH_SIZE_PER_DPU * MAX_DPU,
-        //     check_result));
-        //     // }
-        // }
-        // print_all_timers(pt_full);
-        // print_all_timers(pt_succinct_time);
-        // print_all_timers(pt_name);
-        // // init_timer.print();
-        // // insert_timer.print();
-        // // predecessor_timer.print();
-        // // remove_timer.print();
-        // // L3_sancheck();
-        // DPU_ASSERT(dpu_free(dpu_set));
-        // return 0;
-    }
-
     dpu_control::free();
     return 0;
 }
