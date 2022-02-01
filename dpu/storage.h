@@ -16,9 +16,10 @@ __mram_noinit uint8_t
 
 __mram_noinit ht_slot l3ht[LX_HASHTABLE_SIZE]; // must be 8 bytes aligned
 __host int l3htcnt = 0;
-__mram_noinit uint8_t l3buffer[LX_BUFFER_SIZE];
-__host int l3cnt = 8;
-__host mL3ptr root;
+__mram_noinit bnode bbuffer[LX_BUFFER_SIZE / sizeof(bnode)];
+__host int bcnt = 1;
+__host mBptr root;
+__host mBptr min_node;
 
 // dpu.c
 int64_t DPU_ID;  // = -1;
