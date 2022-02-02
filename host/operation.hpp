@@ -1,8 +1,9 @@
 #pragma once
 #include <parlay/primitives.h>
+
+#include "dpu_control.hpp"
 #include "oracle.hpp"
 #include "task.hpp"
-#include "dpu_control.hpp"
 #include "task_framework_host.hpp"
 #include "value.hpp"
 using namespace std;
@@ -14,7 +15,6 @@ class pim_skip_list {
     static parlay::sequence<int64_t> key_split;
     static parlay::sequence<int64_t> min_key;
     // static int64_t min_key[NR_DPUS + 10];
-    static int max_height;
 
    private:
     static void init_splits() {
@@ -27,9 +27,12 @@ class pim_skip_list {
             key_split[i] = key_split[i - 1] + split;
             // cout<<key_split[i]<<endl;
         }
-        for (int i = 0; i < nr_of_dpus - 1; i ++) {
+        for (int i = 0; i < nr_of_dpus - 1; i++) {
             min_key[i] = key_split[i + 1];
         }
+        // for (int i = 0; i < nr_of_dpus; i ++) {
+        //     printf("split[%d]=%lld\n", i, key_split[i]);
+        // }
         min_key[nr_of_dpus - 1] = INT64_MAX;
         // key_split[nr_of_dpus] = INT64_MAX;
     }
@@ -45,9 +48,8 @@ class pim_skip_list {
         batch->push_task_sorted(
             nr_of_dpus, nr_of_dpus,
             [&](size_t i) {
-                return (L3_init_task){{.key = key_split[i],
-                                       .value = INT64_MIN,
-                                       .height = max_height}};
+                return (L3_init_task){
+                    {.key = INT64_MIN, .value = INT64_MIN}};
             },
             [&](size_t i) { return i; }, make_slice(location));
         io->finish_task_batch();
@@ -64,8 +66,9 @@ class pim_skip_list {
         // init_skiplist();
     }
 
-    template<typename I64Iterator>
-    static int find_target(int64_t key, slice<I64Iterator, I64Iterator> target) {
+    template <typename I64Iterator>
+    static int find_target(int64_t key,
+                           slice<I64Iterator, I64Iterator> target) {
         int l = 0, r = target.size();
         while (r - l > 1) {
             int mid = (l + r) >> 1;
@@ -81,8 +84,8 @@ class pim_skip_list {
     template <typename IntIterator1, typename IntIterator2,
               typename IntIterator3>
     static void find_targets(slice<IntIterator1, IntIterator1> in,
-                            slice<IntIterator2, IntIterator2> target,
-                            slice<IntIterator3, IntIterator3> split) {
+                             slice<IntIterator2, IntIterator2> target,
+                             slice<IntIterator3, IntIterator3> split) {
         int n = in.size();
         parlay::sequence<int> starts(nr_of_dpus, 0);
         time_nested("bs", [&]() {
@@ -194,17 +197,6 @@ class pim_skip_list {
                          make_slice(key_split));
         });
 
-        auto heights = parlay::sequence<int>(n);
-        time_nested("init height", [&]() {
-            parlay::parallel_for(0, n, [&](size_t i) {
-                int32_t t = rn_gen::parallel_rand();
-                t = t & (-t);
-                int h = __builtin_ctz(t) + 1;
-                h = min(h, max_height);
-                heights[i] = h;
-            });
-        });
-
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
             io = alloc_io_manager();
@@ -214,13 +206,20 @@ class pim_skip_list {
             batch->push_task_sorted(
                 n, nr_of_dpus,
                 [&](size_t i) {
-                    return (L3_insert_task){{.key = kv_sorted[i].key,
-                                             .value = kv_sorted[i].value,
-                                             .height = heights[i]}};
+                    return (L3_insert_task){
+                        {.key = kv_sorted[i].key, .value = kv_sorted[i].value}};
                 },
                 [&](size_t i) { return target[i]; }, make_slice(location));
             io->finish_task_batch();
         });
+
+        // for (int i = 0; i < nr_of_dpus; i ++) {
+        //     for (int j = 0; j < batch->tbs[i].count(); j ++) {
+        //         auto t = (L3_insert_task*)batch->ith(i, j);
+        //         printf("[%d,%d]key=%llx\tvalue=%llx\n", i, j, t->key, t->value);
+        //     }
+        // }
+        // exit(0);
 
         time_nested("taskgen2", [&]() {
             batch = io->alloc<L3_get_min_task, L3_get_min_reply>(direct);
@@ -242,6 +241,7 @@ class pim_skip_list {
                 auto rep = (L3_get_min_reply*)batch->ith(i, 0);
                 assert(rep->key <= min_key[i]);
                 min_key[i] = rep->key;
+                // printf("%d %lld\n", i, min_key[i]);
             }
         });
 
@@ -286,5 +286,3 @@ class pim_skip_list {
 
 parlay::sequence<int64_t> pim_skip_list::key_split;
 parlay::sequence<int64_t> pim_skip_list::min_key;
-// int64_t pim_skip_list::key_split[NR_DPUS + 10];
-int pim_skip_list::max_height = 19;

@@ -122,29 +122,29 @@ static inline void b_node_init(bnode* bn, int ht, pptr up) {
     }
 }
 
-static inline void b_build_up(bnode* bn, mBptr nn, int n) {
-    for (int j = 0; j < n; j ++) {
-        mBptr tmp = (mBptr)bn->addrs[j].addr;
-        tmp->up = (pptr){.id = DPU_ID, .addr = nn};
-    }
-}
+// static inline void b_build_up(bnode* bn, mBptr nn, int n) {
+//     for (int j = 0; j < n; j ++) {
+//         mBptr tmp = (mBptr)bn->addrs[j].addr;
+//         tmp->up = (pptr){.id = DPU_ID, .addr = nn};
+//     }
+// }
 
-static inline void b_node_fill_apply(bnode* bn, mBptr nn, int n, int64_t* keys,
-                               int64_t* addrs, bool change_up) {
-    bn->size = n;
-    for (int j = 0; j < n; j++) {
-        bn->keys[j] = keys[j];
-        bn->addrs[j] = I64_TO_PPTR(addrs[j]);
-    }
-    for (int j = n; j < DB_SIZE; j++) {
-        bn->keys[j] = INT64_MIN;
-        bn->addrs[j] = null_pptr;
-    }
-    if (change_up) {
-        b_build_up(bn, nn, n);
-    }
-    mram_write(bn, nn, sizeof(bnode));
-}
+// static inline void b_node_fill_apply(bnode* bn, mBptr nn, int n, int64_t* keys,
+//                                int64_t* addrs, bool change_up) {
+//     bn->size = n;
+//     for (int j = 0; j < n; j++) {
+//         bn->keys[j] = keys[j];
+//         bn->addrs[j] = I64_TO_PPTR(addrs[j]);
+//     }
+//     for (int j = n; j < DB_SIZE; j++) {
+//         bn->keys[j] = INT64_MIN;
+//         bn->addrs[j] = null_pptr;
+//     }
+//     if (change_up) {
+//         b_build_up(bn, nn, n);
+//     }
+//     mram_write(bn, nn, sizeof(bnode));
+// }
 
 // L3
 // static inline uint32_t L3_node_size(int height) {

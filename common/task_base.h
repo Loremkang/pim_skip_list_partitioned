@@ -23,13 +23,11 @@ TASK(empty_task_reply, 0, true, 0, {})
 TASK(L3_insert_task, 1, true, sizeof(L3_insert_task), {
     int64_t key;
     int64_t value;
-    int64_t height;
 })
 
 TASK(L3_init_task, 2, true, sizeof(L3_init_task), {
     int64_t key;
     int64_t value;
-    int64_t height;
 })
 
 TASK(L3_remove_task, 3, true, sizeof(L3_remove_task), {

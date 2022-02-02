@@ -73,7 +73,7 @@ void exec_L3_init_task(int lft, int rt) {
     if (tid == 0) {
         init_task_reader(0);
         L3_init_task* tit = (L3_init_task*)get_task_cached(0);
-        b_init(tit->key, tit->value, tit->height);
+        b_init(tit->key, tit->value);
     }
 }
 
@@ -109,11 +109,18 @@ void exec_L3_insert_task(int lft, int rt) {
     // int n = rt - lft;
     // int tid = me();
 
-    __mram_ptr L3_insert_task* mram_tit =
-        (__mram_ptr L3_insert_task*)recv_block_tasks;
-    mram_tit += lft;
+    // __mram_ptr L3_insert_task* mram_tit =
+    //     (__mram_ptr L3_insert_task*)recv_block_tasks;
+    
+    init_task_reader(lft);
+    for (int i = lft; i < rt; i ++) {
+        L3_insert_task* tit = (L3_insert_task*)get_task_cached(i);
+        mod_keys[i] = tit->key;
+        mod_values[i] = I64_TO_PPTR(tit->value);
+    }
+    // mram_tit += lft;
 
-    b_insert_parallel(recv_block_task_cnt, lft, rt, mram_tit);
+    b_insert_parallel(recv_block_task_cnt, lft, rt);
 
     // newnode_size[tid] = 0;
     // for (int i = 0; i < n; i++) {
@@ -147,17 +154,8 @@ void exec_L3_get_min_task(int lft, int rt) {
     (void)lft;
     (void)rt;
     init_block_with_type(L3_get_min_task, L3_get_min_reply);
-    mBptr nn = min_node;
-    int64_t min_key = INT64_MAX;
-    int64_t keys[DB_SIZE];
-    mram_read(nn->keys, keys, sizeof(int64_t) * DB_SIZE);
-#pragma clang loop unroll(full)
-    for (int i = 0; i < DB_SIZE; i++) {
-        if (keys[i] > INT64_MIN && keys[i] < min_key) {
-            min_key = keys[i];
-        }
-    }
-    L3_get_min_reply tgmr = (L3_get_min_reply){.key = min_key};
+    int64_t key = b_get_min_key();
+    L3_get_min_reply tgmr = (L3_get_min_reply){.key = key};
     push_fixed_reply(0, &tgmr);
 }
 
