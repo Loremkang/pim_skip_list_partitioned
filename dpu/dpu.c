@@ -72,12 +72,14 @@ void exec_L3_init_task(int lft, int rt) {
     init_block_with_type(L3_init_task, empty_task_reply);
     if (tid == 0) {
         init_task_reader(0);
-        L3_init_task* tit = (L3_init_task*)get_task_cached(0);
+        // L3_init_task* tit = (L3_init_task*)get_task_cached(0);
         L3_init();
     }
 }
 
 void exec_L3_get_task(int lft, int rt) {
+    (void)lft;
+    (void)rt;
     // init_block_with_type(L3_get_task, L3_get_reply);
     // init_task_reader(lft);
     // for (int i = lft; i < rt; i ++) {
@@ -121,56 +123,26 @@ void exec_L3_search_task(int lft, int rt) {
 
 void exec_L3_insert_task(int lft, int rt) {
     init_block_with_type(L3_insert_task, empty_task_reply);
-    // init_task_reader(lft);
-
-    // int n = rt - lft;
-    // int tid = me();
-
-    // __mram_ptr L3_insert_task* mram_tit =
-    //     (__mram_ptr L3_insert_task*)recv_block_tasks;
-
     init_task_reader(lft);
+
     for (int i = lft; i < rt; i++) {
         L3_insert_task* tit = (L3_insert_task*)get_task_cached(i);
         mod_keys[i] = tit->key;
         mod_values[i] = I64_TO_PPTR(tit->value);
     }
 
-    // mram_tit += lft;
-
     b_insert_parallel(recv_block_task_cnt, lft, rt);
-
-    // if (me() == 0) {
-    //     bool sc = sancheck(root);
-    //     IN_DPU_ASSERT(sc, "sc fail\n");
-    // }
-
-    // newnode_size[tid] = 0;
-    // for (int i = 0; i < n; i++) {
-    //     int height = mram_tit[i].height;
-    //     newnode_size[tid] += L3_node_size(height);
-    //     IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
-    //                     "execute: invalid height\n");
-    // }
-
-    // mL3ptr* right_predecessor_shared = bufferA_shared;
-    // mL3ptr* right_newnode_shared = bufferB_shared;
-    // L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
-    //                     right_predecessor_shared, right_newnode_shared);
 }
 
 void exec_L3_remove_task(int lft, int rt) {
     init_block_with_type(L3_remove_task, empty_task_reply);
-
-    // int n = rt - lft;
-
-    // __mram_ptr L3_remove_task* mram_trt =
-    //     (__mram_ptr L3_remove_task*)recv_block_tasks;
-    // mram_trt += lft;
-
-    // mL3ptr* left_node_shared = bufferA_shared;
-    // L3_remove_parallel(n, lft, mram_trt, max_height_shared,
-    //                     left_node_shared);
+    init_task_reader(lft);
+    
+    for (int i = lft; i < rt; i++) {
+        L3_remove_task* trt = (L3_remove_task*)get_task_cached(i);
+        mod_keys[i] = trt->key;
+    }
+    b_remove_parallel(recv_block_task_cnt, lft, rt);
 }
 
 void exec_L3_get_min_task(int lft, int rt) {

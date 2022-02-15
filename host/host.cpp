@@ -57,6 +57,39 @@ void init_dpus() {
     ASSERT(!io->exec());
 }
 
+int pim_skip_list_debug() {
+    rn_gen::init();
+    pim_skip_list::init();
+    {
+        const int T = 5;
+        const int n = 1e6;
+        auto kvs = parlay::tabulate(T * n, [&](int64_t i) {
+            return (key_value){.key = rn_gen::parallel_rand(),
+                               .value = rn_gen::parallel_rand()};
+        });
+        for (int i = 0; i < T; i++) {
+            pim_skip_list::insert(make_slice(kvs).cut(i * n, (i + 1) * n));
+        }
+        
+        for (int i = 0; i < 1; i++) {
+            auto valid = parlay::tabulate(n * T, [&](size_t i) -> bool {
+                return (rn_gen::parallel_rand() % T) == 0;
+            });
+            auto keys =
+                parlay::tabulate(n * T, [&](size_t i) { return kvs[i].key; });
+            auto to_remove = parlay::pack(keys, valid);
+            pim_skip_list::remove(make_slice(to_remove));
+        }
+
+        for (int i = 0; i < 1; i++) {
+            auto keys =
+                parlay::tabulate(n, [&](size_t i) { return rn_gen::parallel_rand(); });
+            auto result = pim_skip_list::predecessor(make_slice(keys));
+        }
+    }
+    return 0;
+}
+
 /**
  * @brief Main of the Host Application.
  */
@@ -65,6 +98,9 @@ int main(int argc, char* argv[]) {
     dpu_control::alloc(DPU_ALLOCATE_ALL);
     dpu_control::load(DPU_BINARY);
     init_dpus();
+
+    // return pim_skip_list_debug();
+
     // dpu_control::print_all_log();
     driver::exec(argc, argv);
 
