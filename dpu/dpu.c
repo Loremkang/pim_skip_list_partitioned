@@ -73,7 +73,7 @@ void exec_L3_init_task(int lft, int rt) {
     if (tid == 0) {
         init_task_reader(0);
         L3_init_task* tit = (L3_init_task*)get_task_cached(0);
-        b_init(tit->key, tit->value);
+        L3_init();
     }
 }
 
@@ -92,14 +92,31 @@ void exec_L3_get_task(int lft, int rt) {
 void exec_L3_search_task(int lft, int rt) {
     init_block_with_type(L3_search_task, L3_search_reply);
     init_task_reader(lft);
+    // {
+    //     int tid = me();
+    //     if (tid == 0 && DPU_ID == 2540) {
+    //         init_task_reader(0);
+    //         printf("minkey=%lld\n", b_get_min_key());
+    //         for (int i = 0; i < recv_block_task_cnt; i++) {
+    //             L3_search_task* tst = (L3_search_task*)get_task_cached(i);
+    //             printf("key[%d]=%lld\n", i, tst->key);
+    //         }
+    //     }
+    //     EXIT();
+    // }
+    int tid = me();
     for (int i = lft; i < rt; i++) {
         L3_search_task* tst = (L3_search_task*)get_task_cached(i);
         mBptr nn;
         int64_t val = INT64_MIN;
         int64_t key = b_search(tst->key, &nn, &val);
+        // if (tid == 0 && DPU_ID == 2510) {
+        //     printf("%lld %lld %lld\n", tst->key, key, val);
+        // }
         L3_search_reply tsr = (L3_search_reply){.key = key, .value = val};
         push_fixed_reply(i, &tsr);
     }
+    // EXIT();
 }
 
 void exec_L3_insert_task(int lft, int rt) {
@@ -111,16 +128,22 @@ void exec_L3_insert_task(int lft, int rt) {
 
     // __mram_ptr L3_insert_task* mram_tit =
     //     (__mram_ptr L3_insert_task*)recv_block_tasks;
-    
+
     init_task_reader(lft);
-    for (int i = lft; i < rt; i ++) {
+    for (int i = lft; i < rt; i++) {
         L3_insert_task* tit = (L3_insert_task*)get_task_cached(i);
         mod_keys[i] = tit->key;
         mod_values[i] = I64_TO_PPTR(tit->value);
     }
+
     // mram_tit += lft;
 
     b_insert_parallel(recv_block_task_cnt, lft, rt);
+
+    // if (me() == 0) {
+    //     bool sc = sancheck(root);
+    //     IN_DPU_ASSERT(sc, "sc fail\n");
+    // }
 
     // newnode_size[tid] = 0;
     // for (int i = 0; i < n; i++) {

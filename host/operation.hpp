@@ -171,6 +171,10 @@ class pim_skip_list {
             auto reply = (L3_search_reply*)batch->ith(target[i], location[i]);
             return (key_value){.key = reply->key, .value = reply->value};
         });
+        // for (int i = 0; i < 100; i ++) {
+        //     printf("q=%lld k=%lld v=%lld\n", keys[i], result[i].key, result[i].value);
+        // }
+        // exit(0);
         time_end("get_result");
         io->reset();
         return result;
@@ -246,6 +250,10 @@ class pim_skip_list {
         });
 
         io->reset();
+        // for (int i = 0; i < nr_of_dpus; i ++) {
+        //     printf("minkey[%d]=%lld\n", i, min_key[i]);
+        // }
+        // exit(0);
         return;
     }
 

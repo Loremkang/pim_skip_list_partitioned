@@ -6,6 +6,7 @@
 #define MAX_L3_HEIGHT (20)
 
 #define DB_SIZE (16)
+#define HF_DB_SIZE (8)
 
 /* Size of the buffer on which the checksum will be performed */
 // #define BUFFER_SIZE (200)

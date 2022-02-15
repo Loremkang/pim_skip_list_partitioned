@@ -17,7 +17,7 @@ typedef struct ht_slot {
 
 // #define LX_HASHTABLE_SIZE (1 << 10)
 // L3
-MUTEX_INIT(get_new_L3_lock);
+// MUTEX_INIT(get_new_L3_lock);
 MUTEX_INIT(ht_lock);
 extern __mram_ptr ht_slot l3ht[];  // must be 8 bytes aligned. 0 as null.
 extern int l3htcnt;
@@ -108,17 +108,6 @@ static inline uint32_t ht_search(__mram_ptr ht_slot* ht, int64_t key,
             return (uint32_t)hs.v;
         }
         IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
-    }
-}
-
-static inline void b_node_init(bnode* bn, int ht, pptr up) {
-    bn->height = ht;
-    bn->up = up;
-    bn->size = 0;
-    #pragma clang loop unroll(full)
-    for (int i = 0; i < DB_SIZE; i ++) {
-        bn->keys[i] = INT64_MIN;
-        bn->addrs[i] = null_pptr;
     }
 }
 

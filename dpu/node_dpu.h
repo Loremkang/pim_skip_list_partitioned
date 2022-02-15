@@ -8,7 +8,7 @@
 #include "macro.h"
 
 typedef struct bnode {
-    pptr up;
+    pptr up, right;
     int64_t height;
     int64_t size;
     int64_t keys[DB_SIZE];
@@ -19,4 +19,11 @@ typedef __mram_ptr struct bnode* mBptr;
 
 // extern mL3ptr root;
 extern mBptr root;
-extern mBptr min_node;
+// extern mBptr min_node;
+extern int64_t DPU_ID;
+
+static pptr mbptr_to_pptr(const mBptr addr) {
+    return (pptr){.id = DPU_ID, .addr = (uint32_t)addr};
+}
+
+static inline mBptr pptr_to_mbptr(pptr x) { return (mBptr)x.addr; }
