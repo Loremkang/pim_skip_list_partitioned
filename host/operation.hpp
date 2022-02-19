@@ -6,6 +6,10 @@
 #include "task.hpp"
 #include "task_framework_host.hpp"
 #include "value.hpp"
+
+#include "host_util.hpp"
+// Range Scan
+
 using namespace std;
 using namespace parlay;
 
@@ -15,6 +19,31 @@ class pim_skip_list {
     static parlay::sequence<int64_t> key_split;
     static parlay::sequence<int64_t> min_key;
     // static int64_t min_key[NR_DPUS + 10];
+
+#ifdef DPU_ENERGY
+    static uint64_t op_total;
+    static uint64_t db_size_total;
+    static uint64_t cycle_total;
+#endif
+
+    static void dpu_energy_stats(bool flag = false) {
+#ifdef DPU_ENERGY
+        uint64_t db_iter=0, op_iter=0, cycle_iter=0, instr_iter=0;
+        DPU_FOREACH(dpu_set, dpu, each_dpu) {
+            DPU_ASSERT(dpu_copy_from(dpu, "op_count", 0, &op_iter, sizeof(uint64_t)));
+            DPU_ASSERT(dpu_copy_from(dpu, "db_size_count", 0, &db_iter, sizeof(uint64_t)));
+            DPU_ASSERT(dpu_copy_from(dpu, "cycle_count", 0, &cycle_iter, sizeof(uint64_t)));
+            op_total += op_iter;
+            db_size_total += db_iter;
+            cycle_total += cycle_iter;
+            if(flag) {
+                cout<<"DPU ID: "<<each_dpu<<" "<<op_iter<<" "<<db_iter<<" ";
+                cout<<((op_iter > 0) ? (db_iter / op_iter) : 0)<<" "<<cycle_iter<<endl;
+            }
+        }
+        cout<<op_total<<" "<<db_size_total<<" "<<cycle_total<<" "<<endl;
+#endif
+    }
 
    private:
     static void init_splits() {
@@ -66,10 +95,11 @@ class pim_skip_list {
         // init_skiplist();
     }
 
-    template <typename I64Iterator>
-    static int find_target(int64_t key,
-                           slice<I64Iterator, I64Iterator> target) {
-        int l = 0, r = target.size();
+    // Range Scan
+    template<typename I64Iterator>
+    static int find_target(int64_t key, slice<I64Iterator, I64Iterator> target,
+                           int ll = 0, int rr = -1) {
+        int l = ((ll < 0) ? 0 : ll), r = ((rr <= ll) ? target.size() : rr);
         while (r - l > 1) {
             int mid = (l + r) >> 1;
             if (target[mid] <= key) {
@@ -79,6 +109,33 @@ class pim_skip_list {
             }
         }
         return l;
+    }
+
+    // Range Scan
+    template<typename I64Iterator>
+    static auto find_range_target(scan_operation scan_op,
+                                 slice<I64Iterator, I64Iterator> target,
+                                 int ll = 0, int rr = -1) {
+        int64_t lkey = scan_op.lkey, rkey = scan_op.rkey;
+        int l = ((ll < 0) ? 0 : ll), r = ((rr <= ll) ? target.size() : rr);
+        int mid;
+        while (r - l > 1) {
+            mid = (l + r) >> 1;
+            if (target[mid] <= lkey) {
+                l = mid;
+            }
+            else if(target[mid - 1] >= rkey) {
+                r = mid;
+            }
+            else {
+                break;
+            }
+        }
+        int res_l = find_target(lkey, target, l, mid);
+        int res_r = find_target(rkey, target, mid, r);
+        if(res_r >= target.size())
+            res_r = target.size() - 1;
+        return std::make_pair(res_l, res_r);
     }
 
     template <typename IntIterator1, typename IntIterator2,
@@ -103,20 +160,6 @@ class pim_skip_list {
                 1024 / log2_up(n));
         });
         parlay::scan_inclusive_inplace(target, parlay::maxm<int>());
-        // parlay::scan_inplace(target, );
-        // for (int i = 1; i < n; i++) {
-        //     if (target[i] == 0) {
-        //         target[i] = target[i - 1];
-        //     }
-        // }
-        // int j = 0;
-        // for (int i = 0; i < n; i++) {
-        //     while (j < nr_of_dpus && split[j] <= in[i]) {
-        //         j++;
-        //     }
-        //     target[i] = j - 1;
-        //     ASSERT(target[i] >= 0);
-        // }
     }
 
     static auto get(slice<int64_t*, int64_t*> ops) {
@@ -128,10 +171,7 @@ class pim_skip_list {
         assert(false);
         // return false;
     }
-    static void scan(slice<scan_operation*, scan_operation*> ops) {
-        assert(false);
-        // return false;
-    }
+    
     static auto predecessor(slice<int64_t*, int64_t*> keys) {
         int n = keys.size();
         auto splits = make_slice(min_key);
@@ -140,12 +180,6 @@ class pim_skip_list {
         auto target = parlay::tabulate(
             n, [&](size_t i) { return find_target(keys[i], splits); });
         time_end("find_target");
-
-        // for (int i = 0; i < 100; i ++) {
-        //     printf("query=%lld\npos=%d\nsplit=%lld\n\n", keys[i], target[i],
-        //     splits[target[i]]);
-        // }
-        // exit(0);
 
         IO_Manager* io;
         IO_Task_Batch* batch;
@@ -171,10 +205,6 @@ class pim_skip_list {
             auto reply = (L3_search_reply*)batch->ith(target[i], location[i]);
             return (key_value){.key = reply->key, .value = reply->value};
         });
-        // for (int i = 0; i < 100; i ++) {
-        //     printf("q=%lld k=%lld v=%lld\n", keys[i], result[i].key, result[i].value);
-        // }
-        // exit(0);
         time_end("get_result");
         io->reset();
         return result;
@@ -217,14 +247,6 @@ class pim_skip_list {
             io->finish_task_batch();
         });
 
-        // for (int i = 0; i < nr_of_dpus; i ++) {
-        //     for (int j = 0; j < batch->tbs[i].count(); j ++) {
-        //         auto t = (L3_insert_task*)batch->ith(i, j);
-        //         printf("[%d,%d]key=%llx\tvalue=%llx\n", i, j, t->key, t->value);
-        //     }
-        // }
-        // exit(0);
-
         time_nested("taskgen2", [&]() {
             batch = io->alloc<L3_get_min_task, L3_get_min_reply>(direct);
             batch->push_task_sorted(
@@ -245,15 +267,10 @@ class pim_skip_list {
                 auto rep = (L3_get_min_reply*)batch->ith(i, 0);
                 assert(rep->key <= min_key[i]);
                 min_key[i] = rep->key;
-                // printf("%d %lld\n", i, min_key[i]);
             }
         });
 
         io->reset();
-        // for (int i = 0; i < nr_of_dpus; i ++) {
-        //     printf("minkey[%d]=%lld\n", i, min_key[i]);
-        // }
-        // exit(0);
         return;
     }
 
@@ -290,7 +307,162 @@ class pim_skip_list {
         io->reset();
         return;
     }
+
+    // Range Scan
+    static auto scan(slice<scan_operation*, scan_operation*> ops) {
+        int n = ops.size();
+        time_start("merge_range");
+        parlay::sort_inplace(ops, [&](scan_operation s1, scan_operation s2) -> bool {
+            return (s1.lkey < s2.lkey) ||
+                ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
+        });
+        auto range_prefix_scan = parlay::scan(ops, scan_op_rkey_nlt<scan_operation>());
+        auto range_prefix_sum = range_prefix_scan.first;
+        auto scan_start_arr = parlay::tabulate(n, [&](size_t i) -> bool {
+            return (i == 0) || (range_prefix_sum[i].rkey < ops[i].lkey);
+        });
+        auto scan_start = parlay::pack_index(scan_start_arr);
+        int nn = scan_start.size();
+        auto ops_merged = parlay::tabulate(nn, [&](int i){
+            return make_scan_op<scan_operation>(
+                ops[scan_start[i]].lkey,
+                ( (i != nn - 1) ? range_prefix_sum[scan_start[i + 1]].rkey :
+                max(range_prefix_sum[n - 1].rkey, ops[n - 1].rkey) )
+            );
+        });
+        time_end("merge_range");
+
+        time_start("find_target");
+        auto splits = parlay::make_slice(min_key);
+        auto target = parlay::tabulate(nn, [&](size_t i) {
+            return find_range_target(ops_merged[i], splits);
+        });
+        
+        IO_Manager* io;
+        IO_Task_Batch* batch;
+        auto node_nums = parlay::tabulate(nn, [&](size_t i) {
+            return (target[i].second - target[i].first + 1);
+        });
+        auto node_num_prefix_scan = parlay::scan(node_nums);
+        auto node_num = node_num_prefix_scan.second;
+        auto target_scan = parlay::sequence<int>(node_num);
+        auto location = parlay::sequence<int>(node_num);
+        auto ops_scan = parlay::sequence<scan_operation>(node_num);
+        auto node_num_prefix_sum = node_num_prefix_scan.first;
+        time_end("find_target");
+
+        time_nested("taskgen", [&](){
+            parlay::parallel_for(0, nn, [&](size_t i) {
+                for(int j = 0; j < node_nums[i]; j++) {
+                    target_scan[node_num_prefix_sum[i] + j] = target[i].first + j;
+                    ops_scan[node_num_prefix_sum[i] + j] = make_scan_op(
+                        ops_merged[i].lkey, ops_merged[i].rkey
+                    );
+                }
+            });
+            io = alloc_io_manager();
+            ASSERT(io == &io_managers[0]);
+            io->init();
+            batch = io->alloc<L3_scan_task, L3_scan_reply>(direct);
+            time_nested("push_task", [&](){
+                batch->push_task_from_array_by_isort<false>(
+                    node_num, [&](size_t i) {return ops_scan[i];},
+                    make_slice(target_scan), make_slice(location));
+            });
+            io->finish_task_batch();
+        });
+
+        time_nested("exec", [&]() { ASSERT(io->exec()); });
+
+        cout<<"get start"<<endl;
+        time_start("get_result");
+        auto kv_nums = parlay::tabulate(node_num, [&](size_t i) {
+            auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
+            return (reply->length);
+        });
+        auto kv_nums_prefix_scan = parlay::scan(kv_nums);
+        auto kv_num = kv_nums_prefix_scan.second;
+        auto kv_nums_prefix_sum = kv_nums_prefix_scan.first;
+        auto kv_set = parlay::sequence<key_value>(kv_num);
+        parlay::parallel_for(0, node_num, [&](size_t i){
+            auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
+            for(int j = 0; j < kv_nums[i]; j++) {
+                kv_set[kv_nums_prefix_sum[i] + j].key = reply->vals[j];
+                kv_set[kv_nums_prefix_sum[i] + j].value = reply->vals[j + reply->length];
+            }
+        });
+        time_end("get_result");
+        io->reset();
+
+        cout<<"reassemble start"<<endl;
+        time_start("reassemble_result");
+        auto scan_range_ll = parlay::sequence<int>(n, -1);
+        auto scan_range_rr = parlay::sequence<int>(n, -1);
+        parlay::parallel_for(0, nn, [&](int i) {
+            scan_range_ll[scan_start[i]] = kv_nums_prefix_sum[node_num_prefix_sum[i]];
+            scan_range_rr[scan_start[i]] = ( (i == nn - 1) ?
+                kv_num : kv_nums_prefix_sum[node_num_prefix_sum[i + 1]]
+            );
+        });
+        parlay::scan_inclusive_inplace(scan_range_ll, copy_scan<int>());
+        parlay::scan_inclusive_inplace(scan_range_rr, copy_scan<int>());
+
+        auto index_set = parlay::tabulate(n, [&](size_t i){
+            int ll = scan_range_ll[i], rr = scan_range_rr[i];
+            int64_t lkey = ops[i].lkey, rkey = ops[i].rkey;
+            int mid, res_ll, res_rr;
+            while(rr - ll > 1) {
+                mid = (ll + rr) >> 1;
+                if(lkey >= kv_set[mid].key)
+                    ll = mid;
+                else if(rkey <= kv_set[mid].key)
+                    rr = mid;
+                else {
+                    break;
+                }
+            }
+            int lll = ll, rrr = rr, mmm = mid;
+
+            ll = lll; rr = mmm;
+            while(rr - ll > 1) {
+                mid = (ll + rr) >> 1;
+                if(lkey < kv_set[mid].key)
+                    rr = mid;
+                else
+                    ll = mid;
+            }
+            if(lkey <= kv_set[ll].key)
+                res_ll = ll;
+            else
+                res_ll = ll + 1;
+            
+            ll = mmm; rr = rrr;
+            while(rr - ll > 1) {
+                mid = (ll + rr) >> 1;
+                if(rkey < kv_set[mid].key)
+                    rr = mid;
+                else
+                    ll = mid;
+            }
+            if(ll >= kv_num - 1)
+                res_rr = kv_num;
+            else if(kv_set[ll + 1].key <= rkey)
+                res_rr = ll + 2;
+            else
+                res_rr = ll + 1;
+            return std::make_pair(res_ll, res_rr);
+        });
+        time_end("reassemble_result");
+        
+        return make_pair(kv_set, index_set);
+    }
 };
 
 parlay::sequence<int64_t> pim_skip_list::key_split;
 parlay::sequence<int64_t> pim_skip_list::min_key;
+
+#ifdef DPU_ENERGY
+uint64_t pim_skip_list::op_total;
+uint64_t pim_skip_list::db_size_total;
+uint64_t pim_skip_list::cycle_total;
+#endif
