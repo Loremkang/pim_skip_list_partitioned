@@ -73,3 +73,14 @@ TASK(dpu_init_task, 501, true, sizeof(dpu_init_task), {
 // typedef struct {
 //     int64_t result;
 // } L3_get_reply;
+
+// Range Scan
+TASK(L3_scan_task, 20, true, sizeof(L3_scan_task), {
+    int64_t lkey;
+    int64_t rkey;
+})
+
+TASK(L3_scan_reply, 21, false, sizeof(L3_scan_reply), {
+    int64_t length;
+    int64_t vals[];
+})
