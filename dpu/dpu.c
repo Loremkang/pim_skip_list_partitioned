@@ -43,14 +43,16 @@
 
 int *L3_lfts, *L3_rts, *L3_sizes;
 
+#ifdef DPU_ENERGY
+__host uint64_t op_count = 0;
+__host uint64_t db_size_count = 0;
+__host uint64_t cycle_count = 0;
+#endif
+
 static inline void dpu_init(dpu_init_task* it) {
     DPU_ID = it->dpu_id;
     bcnt = 1;
-    // l3cnt = 8;
     storage_init();
-    // printf("id=%d\n", (int)DPU_ID);
-    // printf("size=%d\n", sizeof(L3node));
-    // storage_init();
 }
 
 void exec_dpu_init_task(int lft, int rt) {
@@ -72,7 +74,6 @@ void exec_L3_init_task(int lft, int rt) {
     init_block_with_type(L3_init_task, empty_task_reply);
     if (tid == 0) {
         init_task_reader(0);
-        // L3_init_task* tit = (L3_init_task*)get_task_cached(0);
         L3_init();
     }
 }
@@ -80,45 +81,20 @@ void exec_L3_init_task(int lft, int rt) {
 void exec_L3_get_task(int lft, int rt) {
     (void)lft;
     (void)rt;
-    // init_block_with_type(L3_get_task, L3_get_reply);
-    // init_task_reader(lft);
-    // for (int i = lft; i < rt; i ++) {
-    //     L3_get_task* tgt = (L3_get_task*)get_task_cached(i);
-    //     int64_t val = INT64_MIN;
-    //     bool exist = L3_get(tgt->key, &val);
-    //     L3_get_reply tgr = (L3_get_reply){.valid = exist, .value = val};
-    //     push_fixed_reply(i, &tgr);
-    // }
 }
 
 void exec_L3_search_task(int lft, int rt) {
     init_block_with_type(L3_search_task, L3_search_reply);
     init_task_reader(lft);
-    // {
-    //     int tid = me();
-    //     if (tid == 0 && DPU_ID == 2540) {
-    //         init_task_reader(0);
-    //         printf("minkey=%lld\n", b_get_min_key());
-    //         for (int i = 0; i < recv_block_task_cnt; i++) {
-    //             L3_search_task* tst = (L3_search_task*)get_task_cached(i);
-    //             printf("key[%d]=%lld\n", i, tst->key);
-    //         }
-    //     }
-    //     EXIT();
-    // }
     int tid = me();
     for (int i = lft; i < rt; i++) {
         L3_search_task* tst = (L3_search_task*)get_task_cached(i);
         mBptr nn;
         int64_t val = INT64_MIN;
         int64_t key = b_search(tst->key, &nn, &val);
-        // if (tid == 0 && DPU_ID == 2510) {
-        //     printf("%lld %lld %lld\n", tst->key, key, val);
-        // }
         L3_search_reply tsr = (L3_search_reply){.key = key, .value = val};
         push_fixed_reply(i, &tsr);
     }
-    // EXIT();
 }
 
 void exec_L3_insert_task(int lft, int rt) {
@@ -154,6 +130,31 @@ void exec_L3_get_min_task(int lft, int rt) {
     push_fixed_reply(0, &tgmr);
 }
 
+// Range Scan
+void exec_L3_scan_task(int lft, int rt) {
+    uint32_t tasklet_id = me();
+    init_block_with_type(L3_scan_task, L3_scan_reply);
+    init_task_reader(lft);
+    varlen_buffer *key_buf, *val_buf;
+    varlen_buffer *up_buf, *down_buf;
+    up_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer);
+    down_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer + (M_BUFFER_SIZE >> 2));
+    key_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer + (M_BUFFER_SIZE >> 1));
+    val_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer + (M_BUFFER_SIZE >> 2) + (M_BUFFER_SIZE >> 1));
+    int64_t len;
+    L3_scan_task* tsct;
+    mpint64_t rep;
+    for (int i = lft; i < rt; i ++) {
+        tsct = (L3_scan_task*)get_task_cached(i);
+        L3_scan(tsct->lkey, tsct->rkey, key_buf, val_buf, up_buf, down_buf);
+        len = key_buf->len;
+        rep = (mpint64_t)push_variable_reply_zero_copy(tasklet_id, S64((len << 1) + 1));
+        rep[0] = len;
+        varlen_buffer_to_mram(key_buf, rep + 1);
+        varlen_buffer_to_mram(val_buf, rep + 1 + len);
+    }
+}
+
 void execute(int lft, int rt) {
     uint32_t tid = me();
     switch (recv_block_task_type) {
@@ -185,6 +186,11 @@ void execute(int lft, int rt) {
             exec_L3_get_min_task(lft, rt);
             break;
         }
+        // Range Scan
+        case L3_scan_task_id: {
+            exec_L3_scan_task(lft, rt);
+            break;
+        }
         default: {
             printf("TT = %lld\n", recv_block_task_type);
             IN_DPU_ASSERT(false, "WTT\n");
@@ -198,13 +204,6 @@ void init() {
     L3_lfts = mem_alloc(sizeof(int) * NR_TASKLETS);
     L3_rts = mem_alloc(sizeof(int) * NR_TASKLETS);
     L3_sizes = mem_alloc(sizeof(int) * NR_TASKLETS);
-    // bufferA_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
-    // bufferB_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
-    // max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
-    // newnode_size = mem_alloc(sizeof(uint32_t) * NR_TASKLETS);
-    // for (int i = 0; i < NR_TASKLETS; i++) {
-    //     max_height_shared[i] = 0;
-    // }
 }
 
 int main() {
