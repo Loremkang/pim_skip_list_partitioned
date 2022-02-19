@@ -32,6 +32,11 @@ typedef struct WRAMHeap {
     int64_t DPU_ID;
     mpint64_t send_varlen_offset[NR_TASKLETS];
     mpuint8_t send_varlen_buffer[NR_TASKLETS];
+#ifdef DPU_ENERGY
+    uint64_t op_cnt;
+    uint64_t db_size_cnt;
+    uint64_t cycle_cnt;
+#endif
 } WRAMHeap;  //` __attribute__((aligned (8)));
 
 __mram_noinit uint8_t wram_heap_save_addr_tmp[sizeof(WRAMHeap) << 1];
@@ -43,9 +48,14 @@ void wram_heap_save() {
         heapInfo.send_varlen_offset[i] = send_varlen_offset[i];
         heapInfo.send_varlen_buffer[i] = send_varlen_buffer[i];
     }
-
+#ifdef DPU_ENERGY
+    heapInfo.op_cnt = op_count;
+    heapInfo.db_size_cnt = db_size_count;
+    heapInfo.cycle_cnt = cycle_count;
+#endif
     if (saveAddr == NULL_pt(mpuint8_t)) saveAddr = wram_heap_save_addr_tmp;
-    mram_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
+    // mram_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
+    m_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
     wram_heap_save_addr = saveAddr;
 }
 
@@ -54,22 +64,29 @@ void wram_heap_init() {
         send_varlen_offset[i] = &(send_varlen_offset_tmp[i][0]);
         send_varlen_buffer[i] = &(send_varlen_buffer_tmp[i][0]);
     }
+#ifdef DPU_ENERGY
+    op_count = 0;
+    db_size_count = 0;
+    cycle_count = 0;
+#endif
 }
 
 void wram_heap_load() {
     mpuint8_t saveAddr = wram_heap_save_addr;
     if (saveAddr == NULL_pt(mpuint8_t)) {
-        // printf("%d\n", (int)send_varlen_buffer_tmp);
-        // exit(0);
-        // EXIT();
         wram_heap_init();
     } else {
         WRAMHeap heapInfo;
-        mram_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
+        m_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
         DPU_ID = heapInfo.DPU_ID;
         for (int i = 0; i < NR_TASKLETS; i++) {
             send_varlen_offset[i] = heapInfo.send_varlen_offset[i];
             send_varlen_buffer[i] = heapInfo.send_varlen_buffer[i];
         }
+#ifdef DPU_ENERGY
+        op_count = heapInfo.op_cnt;
+        db_size_count = heapInfo.db_size_cnt;
+        cycle_count = heapInfo.cycle_cnt;
+#endif
     }
 }
