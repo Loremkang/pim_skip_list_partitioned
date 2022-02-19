@@ -374,7 +374,7 @@ class pim_skip_list {
 
         time_nested("exec", [&]() { ASSERT(io->exec()); });
 
-        cout<<"get start"<<endl;
+        // cout<<"get start"<<endl;
         time_start("get_result");
         auto kv_nums = parlay::tabulate(node_num, [&](size_t i) {
             auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
@@ -394,21 +394,12 @@ class pim_skip_list {
         time_end("get_result");
         io->reset();
 
-        cout<<"reassemble start"<<endl;
+        // cout<<"reassemble start"<<endl;
         time_start("reassemble_result");
-        auto scan_range_ll = parlay::sequence<int>(n, -1);
-        auto scan_range_rr = parlay::sequence<int>(n, -1);
-        parlay::parallel_for(0, nn, [&](int i) {
-            scan_range_ll[scan_start[i]] = kv_nums_prefix_sum[node_num_prefix_sum[i]];
-            scan_range_rr[scan_start[i]] = ( (i == nn - 1) ?
-                kv_num : kv_nums_prefix_sum[node_num_prefix_sum[i + 1]]
-            );
-        });
-        parlay::scan_inclusive_inplace(scan_range_ll, copy_scan<int>());
-        parlay::scan_inclusive_inplace(scan_range_rr, copy_scan<int>());
-
+        parlay::sort_inplace(kv_set);
+        kv_set = parlay::unique(kv_set);
         auto index_set = parlay::tabulate(n, [&](size_t i){
-            int ll = scan_range_ll[i], rr = scan_range_rr[i];
+            int ll = 0, rr = kv_num;
             int64_t lkey = ops[i].lkey, rkey = ops[i].rkey;
             int mid, res_ll, res_rr;
             while(rr - ll > 1) {
@@ -453,7 +444,7 @@ class pim_skip_list {
             return std::make_pair(res_ll, res_rr);
         });
         time_end("reassemble_result");
-        
+        cout<<"Scan: "<<nn<<" "<<kv_num<<endl;
         return make_pair(kv_set, index_set);
     }
 };
