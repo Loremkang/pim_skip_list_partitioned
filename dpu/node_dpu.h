@@ -27,3 +27,9 @@ static pptr mbptr_to_pptr(const mBptr addr) {
 }
 
 static inline mBptr pptr_to_mbptr(pptr x) { return (mBptr)x.addr; }
+
+#ifdef DPU_ENERGY
+extern uint64_t op_count;
+extern uint64_t db_size_count;
+extern uint64_t cycle_count;
+#endif
