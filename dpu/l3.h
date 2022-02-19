@@ -6,12 +6,9 @@
 #include "hashtable_l3size.h"
 #include <barrier.h>
 #include <alloc.h>
-// #include <profiling.h>
 
-// PROFILING_INIT(prof_newnode);
-// PROFILING_INIT(prof_internal);
-// PROFILING_INIT(prof_external);
-// PROFILING_INIT(prof_finish);
+// Range Scan
+#include "data_block.h"
 
 BARRIER_INIT(L3_barrier1, NR_TASKLETS);
 BARRIER_INIT(L3_barrier2, NR_TASKLETS);
@@ -24,7 +21,8 @@ extern __mram_ptr ht_slot l3ht[];
 
 void print_bnode(mBptr nn) {
     bnode bn;
-    mram_read(nn, &bn, sizeof(bnode));
+    // mram_read(nn, &bn, sizeof(bnode));
+    m_read(nn, &bn, sizeof(bnode));
     printf("addr=%x\n", (uint32_t)nn);
     printf("ht=%lld\tup=%llx\tright=%llx\n", bn.height, pptr_to_int64(bn.up), pptr_to_int64(bn.right));
     printf("size=%lld\n", bn.size);
@@ -57,7 +55,8 @@ void print_bnode(mBptr nn) {
 bool print_tree(mBptr nn) {
     print_bnode(nn);
     bnode bn;
-    mram_read(nn, &bn, sizeof(bnode));
+    // mram_read(nn, &bn, sizeof(bnode));
+    m_read(nn, &bn, sizeof(bnode));
     if (bn.height > 0) {
         for (int i = 0; i < bn.size; i++) {
             RETURN_FALSE_PRINT(valid_pptr(bn.addrs[i]), "pt! inv %d", i);
@@ -69,7 +68,8 @@ bool print_tree(mBptr nn) {
 
 bool sancheck(mBptr nn) {
     bnode bn;
-    mram_read(nn, &bn, sizeof(bnode));
+    // mram_read(nn, &bn, sizeof(bnode));
+    m_read(nn, &bn, sizeof(bnode));
     for (int i = 1; i < bn.size; i++) {
         RETURN_FALSE_PRINT(bn.keys[i] > bn.keys[i - 1],
                            "sc: keyinv %lld %lld\n", bn.keys[i],
@@ -127,7 +127,8 @@ static inline void b_node_init(bnode *bn, int ht, pptr up, pptr right) {
 
 void b_node_fill(mBptr nn, bnode *bn, int size, int64_t *keys,
                         pptr *addrs) {
-    mram_read(nn, bn, sizeof(bnode));
+    // mram_read(nn, bn, sizeof(bnode));
+    m_read(nn, bn, sizeof(bnode));
     bn->size = size;
     for (int i = 0; i < size; i++) {
         bn->keys[i] = keys[i];
@@ -137,7 +138,8 @@ void b_node_fill(mBptr nn, bnode *bn, int size, int64_t *keys,
         bn->keys[i] = INT64_MIN;
         bn->addrs[i] = null_pptr;
     }
-    mram_write(bn, nn, sizeof(bnode));
+    // mram_write(bn, nn, sizeof(bnode));
+    m_write(bn, nn, sizeof(bnode));
     if (bn->height > 0) {
         for (int i = 0; i < size; i ++) {
             mBptr ch = pptr_to_mbptr(bn->addrs[i]);
@@ -164,7 +166,8 @@ void L3_init() {
     bn.size = 1;
     bn.keys[0] = INT64_MIN;
     bn.addrs[0] = null_pptr;
-    mram_write(&bn, nn, sizeof(bnode));
+    // mram_write(&bn, nn, sizeof(bnode));
+    m_write(&bn, nn, sizeof(bnode));
     min_node = root = nn;
 }
 
@@ -172,7 +175,8 @@ static inline int64_t b_search(int64_t key, mBptr *addr, int64_t *value) {
     mBptr tmp = root;
     bnode bn;
     while (true) {
-        mram_read(tmp, &bn, sizeof(bnode));
+        // mram_read(tmp, &bn, sizeof(bnode));
+        m_read(tmp, &bn, sizeof(bnode));
         int64_t pred = INT64_MIN;
         pptr nxt_addr = null_pptr;
         // int64_t pred = bn.keys[0]; // can be INT64_MIN
@@ -272,7 +276,8 @@ void b_insert_onelevel(int n, int tid, int ht) {
         mBptr nn0;
         if (valid_pptr(addr)) {
             nn0 = nn = pptr_to_mbptr(addr);
-            mram_read(nn, &bn, sizeof(bnode));
+            // mram_read(nn, &bn, sizeof(bnode));
+            m_read(nn, &bn, sizeof(bnode));
             up = bn.up;
             right = bn.right;
             nnsize = bn.size;
@@ -357,7 +362,8 @@ void b_insert_onelevel(int n, int tid, int ht) {
                     for (int x = 0; x < nnsize; x++) {
                         printf("nn[%d]=%lld\n", x, nnkeys[x]);
                     }
-                    mram_read(nn0, &bn, sizeof(bnode));
+                    // mram_read(nn0, &bn, sizeof(bnode));
+                    m_read(nn0, &bn, sizeof(bnode));
                     printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
                     for (int x = 0; x < bn.size; x++) {
                         printf("nn0[%d]=%lld\n", x, bn.keys[x]);
@@ -370,28 +376,6 @@ void b_insert_onelevel(int n, int tid, int ht) {
             }
             if (bn.size == DB_SIZE ||
                 (i + HF_DB_SIZE + 1 == totsize && bn.size > HF_DB_SIZE)) {
-                // if (bn.keys[0] == -7125798835171897ll &&
-                //     bn.keys[1] == -6795333434612133ll) {
-                //     printf("**\n");
-                //     printf("bbuffer=%x bcnt=%d\n", bbuffer, bcnt);
-                //     printf("ht=%d addr=%x\n", ht, nn0);
-                //     printf("lft=%d\trt=%d\n", lft, rt);
-                //     printf("l=%d\tr=%d\tnnl=%d\n", l0, r, nnl);
-                //     printf("i=%d\ttotsize=%d\n", i, totsize);
-                //     for (int x = 0; x < nnsize; x++) {
-                //         printf("nn[%d]=%lld\n", x, nnkeys[x]);
-                //     }
-                //     mram_read(nn0, &bn, sizeof(bnode));
-                //     printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
-                //     for (int x = 0; x < bn.size; x++) {
-                //         printf("nn0[%d]=%lld\n", x, bn.keys[x]);
-                //     }
-                //     for (int x = l0; x < r; x++) {
-                //         printf("mod[%d]=%lld\n", x, mod_keys[x]);
-                //     }
-                //     printf("i=%d\ttotsize=%d\n", i, totsize);
-                //     printf("**\n");
-                // }
                 for (int i = 0; i < bn.size; i++) {
                     if (bn.height > 0) {
                         IN_DPU_ASSERT(valid_pptr(bn.addrs[i]), "bio! inv\n");
@@ -400,23 +384,20 @@ void b_insert_onelevel(int n, int tid, int ht) {
                     }
                 }
                 if (nnl == nnsize && l == r) {
-                    mram_write(&bn, nn, sizeof(bnode));
+                    // mram_write(&bn, nn, sizeof(bnode));
+                    m_write(&bn, nn, sizeof(bnode));
                 } else {
                     pptr up = bn.up, right = bn.right;
                     int64_t ht = bn.height;
 
                     mBptr nxt_nn = alloc_bn();
                     bn.right = mbptr_to_pptr(nxt_nn);
-                    mram_write(&bn, nn, sizeof(bnode));
+                    // mram_write(&bn, nn, sizeof(bnode));
+                    m_write(&bn, nn, sizeof(bnode));
 
                     b_node_init(&bn, ht, up, right);
                     nn = nxt_nn;
                 }
-
-                // pptr up = bn.up, right = bn.right;
-                // int64_t ht = bn.height;
-                // b_node_init(&bn, ht, up, right);
-                // nn = alloc_bn();
             }
             if (nnl == nnsize && l == r) {
                 IN_DPU_ASSERT_EXEC(i + 1 == totsize, {
@@ -428,7 +409,8 @@ void b_insert_onelevel(int n, int tid, int ht) {
                     for (int x = 0; x < nnsize; x++) {
                         printf("nn[%d]=%lld\n", x, nnkeys[x]);
                     }
-                    mram_read(nn0, &bn, sizeof(bnode));
+                    // mram_read(nn0, &bn, sizeof(bnode));
+                    m_read(nn0, &bn, sizeof(bnode));
                     printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
                     for (int x = 0; x < bn.size; x++) {
                         printf("nn0[%d]=%lld\n", x, bn.keys[x]);
@@ -448,7 +430,8 @@ void b_insert_onelevel(int n, int tid, int ht) {
                     ch->up = mbptr_to_pptr(nn);
                 }
             }
-            mram_write(&bn, nn, sizeof(bnode));
+            // mram_write(&bn, nn, sizeof(bnode));
+            m_write(&bn, nn, sizeof(bnode));
         }
         IN_DPU_ASSERT_EXEC(l == r && nnl == nnsize, {
             printf("l=%d\tr=%d\tnnl=%d\tnnsize=%d\n", l, r, nnl, nnsize);
@@ -480,7 +463,8 @@ void b_remove_onelevel(int n, int tid, int ht) {
         IN_DPU_ASSERT(valid_pptr(addr), "bro! inva\n");
 
         mBptr nn = pptr_to_mbptr(addr);
-        mram_read(nn, &bn, sizeof(bnode));
+        // mram_read(nn, &bn, sizeof(bnode));
+        m_read(nn, &bn, sizeof(bnode));
         pptr up = bn.up, right = bn.right;
         int nnsize = bn.size;
         for (int i = 0; i < nnsize; i++) {
@@ -512,15 +496,11 @@ void b_remove_onelevel(int n, int tid, int ht) {
                 }
             }
         }
-        mram_write(&bn, nn, sizeof(bnode));
+        // mram_write(&bn, nn, sizeof(bnode));
+        m_write(&bn, nn, sizeof(bnode));
 
         // const int HF_DB_SIZE = DB_SIZE >> 1;
         int future_modif = 0;
-        // mu.lock();
-        // print_array("mod_keys", mod_keys + l, r - l);
-        // print_array("nnkeys", nnkeys, nnsize);
-        // print_bnode(&bn);
-        // mu.unlock();
         if (bn.size < HF_DB_SIZE) {
             future_modif |= underflow_type;
         }
@@ -559,13 +539,14 @@ void b_insert_parallel(int n, int l, int r) {
         mod_addrs[i] = mbptr_to_pptr(nn);
         if (i > 0) {
             int64_t keyl = mod_keys[i - 1];
-            IN_DPU_ASSERT_EXEC(keyl < key, {
-                printf("bip! eq %d %d %d %d %lld %lld\n", i, tid, l, r, key,
-                       keyl);
-                for (int i = 0; i < n; i++) {
-                    printf("key[%d]=%lld\n", i, mod_keys[i]);
-                }
-            });
+            // IN_DPU_ASSERT_EXEC(keyl < key, {
+            //     printf("bip! eq %d %d %d %d %lld %lld\n", i, tid, l, r, key,
+            //            keyl);
+            //     for (int i = 0; i < n; i++) {
+            //         printf("key[%d]=%lld\n", i, mod_keys[i]);
+            //     }
+            // });
+            IN_DPU_ASSERT_EXEC(keyl < key, {});
         }
     }
 
@@ -581,7 +562,6 @@ void b_insert_parallel(int n, int l, int r) {
             }
             int lft = n * tid / NR_TASKLETS;
             int rt = n * (tid + 1) / NR_TASKLETS;
-            // printf("t0 n=%d\ttid=%d\tlft=%d\trt=%d\n", n, tid, lft, rt);
             if (rt > lft) {
                 if (lft != 0) {
                     lft = get_r(mod_addrs, n, lft - 1);
@@ -590,10 +570,8 @@ void b_insert_parallel(int n, int l, int r) {
                 rt = get_r(mod_addrs, n, rt - 1);
             }
 
-            // printf("t1 n=%d\ttid=%d\tlft=%d\trt=%d\n", n, tid, lft, rt);
             L3_lfts[tid] = lft;
             L3_rts[tid] = rt;
-            // printf("l=%d\tr=%d\n", L3_lfts[i], L3_rts[i]);
             barrier_wait(&L3_barrier2);
 
             // execute
@@ -612,13 +590,14 @@ void b_insert_parallel(int n, int l, int r) {
                         if (n > 0) {
                             int64_t key = mod_keys[n];
                             int64_t keyl = mod_keys[n - 1];
-                            IN_DPU_ASSERT_EXEC(key > keyl, {
-                                printf("bip! rev %d %d %d %d %lld %lld\n", i, j, tid, n, key,
-                                    keyl);
-                                for (int i = n - 10; i < n + 10; i++) {
-                                    printf("key[%d]=%lld\n", i, mod_keys[i]);
-                                }
-                            });
+                            // IN_DPU_ASSERT_EXEC(key > keyl, {
+                            //     printf("bip! rev %d %d %d %d %lld %lld\n", i, j, tid, n, key,
+                            //         keyl);
+                            //     for (int i = n - 10; i < n + 10; i++) {
+                            //         printf("key[%d]=%lld\n", i, mod_keys[i]);
+                            //     }
+                            // });
+                            IN_DPU_ASSERT_EXEC(key > keyl, {});
                             IN_DPU_ASSERT(mod_keys[n] > mod_keys[n - 1],
                                           "bip! rev\n");
                         }
@@ -672,7 +651,8 @@ void b_remove_serial_compact(int n, int ht) {
             while (nnl < HF_DB_SIZE) {
                 mBptr nn = pptr_to_mbptr(addr);
                 // print_bnode(nn);
-                mram_read(nn, &bn, sizeof(bnode));
+                // mram_read(nn, &bn, sizeof(bnode));
+                m_read(nn, &bn, sizeof(bnode));
                 for (int i = 0; i < bn.size; i++) {
                     nnkeys[nnl] = bn.keys[i];
                     nnaddrs[nnl] = bn.addrs[i];
@@ -730,20 +710,9 @@ void b_remove_serial_compact(int n, int ht) {
                     nxt_n++;
                 }
                 if (addr_covered == false) {
-                    // if (r == n && recv_epoch_number == 8) {
-                    //     printf("1ac=%d\n", addr_covered);
-                    //     pptr laddr = mod_addrs[l];
-                    //     printf("addr=%llx l=%llx\n", PPTR_TO_I64(addr), PPTR_TO_I64(laddr));
-                    //     EXIT();
-                    // }
                     nn = pptr_to_mbptr(addr);
-                    mram_read(nn, &bn, sizeof(bnode));
-                    // if (r == n && recv_epoch_number == 8) {
-                    //     printf("ac=%d\n", addr_covered);
-                    //     pptr laddr = mod_addrs[l];
-                    //     printf("addr=%llx l=%llx\n", PPTR_TO_I64(addr), PPTR_TO_I64(laddr));
-                    //     EXIT();
-                    // }
+                    // mram_read(nn, &bn, sizeof(bnode));
+                    m_read(nn, &bn, sizeof(bnode));
                     IN_DPU_ASSERT((bn.size >= HF_DB_SIZE ||
                            equal_pptr(bn.right, null_pptr)), "brsc! mr\n");
                     mod_keys2[nxt_n] = bn.keys[0];
@@ -752,12 +721,6 @@ void b_remove_serial_compact(int n, int ht) {
                     mod_type2[nxt_n] = remove_type;
                     nxt_n++;
                 }
-                // if (r == n && recv_epoch_number == 8) {
-                //     printf("ac=%d\n", addr_covered);
-                //     pptr laddr = mod_addrs[l];
-                //     printf("addr=%llx l=%llx\n", PPTR_TO_I64(addr), PPTR_TO_I64(laddr));
-                //     EXIT();
-                // }
             } else if (nnl > DB_SIZE) {
                 bool addr_covered = false;
                 mBptr nn = pptr_to_mbptr(mod_addrs[l]);
@@ -782,12 +745,6 @@ void b_remove_serial_compact(int n, int ht) {
                     }
                 }
                 IN_DPU_ASSERT(filpos != l, "fil=l\n");
-                // IN_DPU_ASSERT_EXEC(filpos != l, {
-                //     printf("l=%d r=%d nnl=%d\n", l, r, nnl);
-                //     print_mram_array("mod_keys", mod_keys + l, r - l);
-                //     print_array("nnkeys", nnkeys, nnl);
-                //     printf("midkey=%lld\n", mid_key);
-                // });
 
                 for (int i = l + 1; i < r; i++) {
                     mBptr nn = pptr_to_mbptr(mod_addrs[i]);
@@ -971,4 +928,51 @@ void b_remove_parallel(int n, int l, int r) {
     // if (DPU_ID == 0) {
     //     EXIT();
     // }
+}
+
+// Range Scan
+static inline void L3_scan(int64_t lkey, int64_t rkey,
+                    varlen_buffer *key_buf, varlen_buffer *val_buf,
+                    varlen_buffer *up_buf, varlen_buffer *down_buf) {
+    bnode bn;
+    mBptr tmp;
+    bool flag;
+    varlen_buffer *tmp_buf;
+    varlen_buffer_reset(key_buf);
+    varlen_buffer_reset(val_buf);
+    varlen_buffer_reset(up_buf);
+    varlen_buffer_reset(down_buf);
+    varlen_buffer_push(up_buf, pptr_to_int64(mbptr_to_pptr(root)));
+    while(true) {
+        for(int64_t j = 0; j < up_buf->len; j++) {
+            tmp = pptr_to_mbptr(int64_to_pptr(varlen_buffer_element(up_buf, j)));
+            m_read(tmp, &bn, sizeof(bnode));
+            flag = false;
+            for (int i = 0; i < bn.size; i++) {
+                if(bn.height > 0) {
+                    if (bn.keys[i] > lkey) {
+                        if(!flag) {
+                            flag = true;
+                            if(i > 0)
+                                varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[i-1]));
+                        }
+                        if(bn.keys[i] <= rkey)
+                            varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[i]));
+                        else break;
+                    }
+                }
+                else {
+                    if (bn.keys[i] >= lkey && bn.keys[i] <= rkey) {
+                        varlen_buffer_push(key_buf, bn.keys[i]);
+                        varlen_buffer_push(val_buf, pptr_to_int64(bn.addrs[i]));
+                    }
+                    else if(bn.keys[i] > rkey)
+                        break;
+                }
+            }
+        }
+        if(down_buf->len == 0) break;
+        tmp_buf = up_buf, up_buf = down_buf, down_buf = tmp_buf;
+        varlen_buffer_reset(down_buf);
+    }
 }
