@@ -933,11 +933,14 @@ void b_remove_parallel(int n, int l, int r) {
 // Range Scan
 static inline void L3_scan(int64_t lkey, int64_t rkey,
                     varlen_buffer *key_buf, varlen_buffer *val_buf,
-                    varlen_buffer *up_buf, varlen_buffer *down_buf) {
+                    varlen_buffer *u_buf, varlen_buffer *d_buf) {
     bnode bn;
     mBptr tmp;
     bool flag;
     varlen_buffer *tmp_buf;
+    varlen_buffer *up_buf = u_buf, *down_buf = d_buf;
+    int64_t tmp_max_value;
+    int tmp_max_idx;
     varlen_buffer_reset(key_buf);
     varlen_buffer_reset(val_buf);
     varlen_buffer_reset(up_buf);
@@ -948,17 +951,18 @@ static inline void L3_scan(int64_t lkey, int64_t rkey,
             tmp = pptr_to_mbptr(int64_to_pptr(varlen_buffer_element(up_buf, j)));
             m_read(tmp, &bn, sizeof(bnode));
             flag = false;
+            tmp_max_value = INT64_MIN;
             for (int i = 0; i < bn.size; i++) {
                 if(bn.height > 0) {
-                    if (bn.keys[i] > lkey) {
-                        if(!flag) {
+                    if(bn.keys[i] <= lkey) {
+                        if(bn.keys[i] >= tmp_max_value) {
+                            tmp_max_value = bn.keys[i];
+                            tmp_max_idx = i;
                             flag = true;
-                            if(i > 0)
-                                varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[i-1]));
                         }
-                        if(bn.keys[i] <= rkey)
-                            varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[i]));
-                        else break;
+                    }
+                    else if(bn.keys[i] <= rkey) {
+                        varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[i]));
                     }
                 }
                 else {
@@ -966,9 +970,10 @@ static inline void L3_scan(int64_t lkey, int64_t rkey,
                         varlen_buffer_push(key_buf, bn.keys[i]);
                         varlen_buffer_push(val_buf, pptr_to_int64(bn.addrs[i]));
                     }
-                    else if(bn.keys[i] > rkey)
-                        break;
                 }
+            }
+            if(flag) {
+                varlen_buffer_push(down_buf, pptr_to_int64(bn.addrs[tmp_max_idx]));
             }
         }
         if(down_buf->len == 0) break;
