@@ -45,7 +45,6 @@ using namespace std;
 void init_dpus() {
     printf("\n********** INIT DPUS **********\n");
     auto io = alloc_io_manager();
-    ASSERT(io == &io_managers[0]);
     io->init();
     IO_Task_Batch* batch = io->alloc<dpu_init_task, empty_task_reply>(direct);
 
@@ -103,6 +102,7 @@ int main(int argc, char* argv[]) {
 
     // dpu_control::print_all_log();
     driver::exec(argc, argv);
+    pim_skip_list::dpu_energy_stats();
 
     dpu_control::free();
     return 0;
