@@ -93,6 +93,7 @@ int pim_skip_list_debug() {
  * @brief Main of the Host Application.
  */
 int main(int argc, char* argv[]) {
+    init_io_managers();
     driver::init();
     dpu_control::alloc(DPU_ALLOCATE_ALL);
     dpu_control::load(DPU_BINARY);
