@@ -70,7 +70,6 @@ class pim_skip_list {
         printf("\n********** INIT SKIP LIST **********\n");
 
         auto io = alloc_io_manager();
-        ASSERT(io == &io_managers[0]);
         io->init();
         auto batch = io->alloc<L3_init_task, empty_task_reply>(direct);
         parlay::sequence<int> location(nr_of_dpus);
@@ -187,7 +186,6 @@ class pim_skip_list {
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
             io = alloc_io_manager();
-            ASSERT(io == &io_managers[0]);
             io->init();
             batch = io->alloc<L3_search_task, L3_search_reply>(direct);
             time_nested("push_task", [&]() {
@@ -234,7 +232,6 @@ class pim_skip_list {
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
             io = alloc_io_manager();
-            ASSERT(io == &io_managers[0]);
             io->init();
             batch = io->alloc<L3_insert_task, empty_task_reply>(direct);
             batch->push_task_sorted(
@@ -292,7 +289,6 @@ class pim_skip_list {
         auto location = parlay::sequence<int>(n);
         time_nested("taskgen", [&]() {
             io = alloc_io_manager();
-            ASSERT(io == &io_managers[0]);
             io->init();
             batch = io->alloc<L3_remove_task, empty_task_reply>(direct);
             batch->push_task_sorted(
@@ -361,7 +357,6 @@ class pim_skip_list {
                 }
             });
             io = alloc_io_manager();
-            ASSERT(io == &io_managers[0]);
             io->init();
             batch = io->alloc<L3_scan_task, L3_scan_reply>(direct);
             time_nested("push_task", [&](){
