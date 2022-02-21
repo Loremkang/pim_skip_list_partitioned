@@ -305,10 +305,10 @@ class pim_skip_list {
     }
 
     // Range Scan
-    static auto scan(slice<scan_operation*, scan_operation*> ops) {
-        int n = ops.size();
+    static auto scan(slice<scan_operation*, scan_operation*> op_set) {
+        int n = op_set.size();
         time_start("merge_range");
-        parlay::sort_inplace(ops, [&](scan_operation s1, scan_operation s2) -> bool {
+        auto ops = parlay::sort(op_set, [&](scan_operation s1, scan_operation s2) -> bool {
             return (s1.lkey < s2.lkey) ||
                 ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
         });
@@ -399,7 +399,7 @@ class pim_skip_list {
         auto kv_n = kv_set.size();
         auto index_set = parlay::tabulate(n, [&](size_t i){
             int ll = 0, rr = kv_n;
-            int64_t lkey = ops[i].lkey, rkey = ops[i].rkey;
+            int64_t lkey = op_set[i].lkey, rkey = op_set[i].rkey;
             int mid, res_ll, res_rr;
             while(rr - ll > 1) {
                 mid = (ll + rr) >> 1;
