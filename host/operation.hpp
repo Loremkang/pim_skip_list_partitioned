@@ -374,7 +374,6 @@ class pim_skip_list {
 
         time_nested("exec", [&]() { ASSERT(io->exec()); });
 
-        // cout<<"get start"<<endl;
         time_start("get_result");
         auto kv_nums = parlay::tabulate(node_num, [&](size_t i) {
             auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
@@ -383,30 +382,35 @@ class pim_skip_list {
         auto kv_nums_prefix_scan = parlay::scan(kv_nums);
         auto kv_num = kv_nums_prefix_scan.second;
         auto kv_nums_prefix_sum = kv_nums_prefix_scan.first;
-        auto kv_set = parlay::sequence<key_value>(kv_num);
+        auto kv_set1 = parlay::sequence<key_value>(kv_num);
         parlay::parallel_for(0, node_num, [&](size_t i){
             auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
             for(int j = 0; j < kv_nums[i]; j++) {
-                kv_set[kv_nums_prefix_sum[i] + j].key = reply->vals[j];
-                kv_set[kv_nums_prefix_sum[i] + j].value = reply->vals[j + reply->length];
+                kv_set1[kv_nums_prefix_sum[i] + j].key = reply->vals[j];
+                kv_set1[kv_nums_prefix_sum[i] + j].value = reply->vals[j + reply->length];
             }
         });
         time_end("get_result");
         io->reset();
 
-        // cout<<"reassemble start"<<endl;
         time_start("reassemble_result");
-        parlay::sort_inplace(kv_set);
-        kv_set = parlay::unique(kv_set);
+        parlay::sort_inplace(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
+            return (kv1.key < kv2.key) ||
+                ((kv1.key == kv2.key) && (kv1.value < kv2.value));
+        });
+        auto kv_set = parlay::unique(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
+            return (kv1.key == kv2.key);
+        });
+        auto kv_n = kv_set.size();
         auto index_set = parlay::tabulate(n, [&](size_t i){
-            int ll = 0, rr = kv_num;
+            int ll = 0, rr = kv_n;
             int64_t lkey = ops[i].lkey, rkey = ops[i].rkey;
             int mid, res_ll, res_rr;
             while(rr - ll > 1) {
                 mid = (ll + rr) >> 1;
                 if(lkey >= kv_set[mid].key)
                     ll = mid;
-                else if(rkey <= kv_set[mid].key)
+                else if(rkey < kv_set[mid].key)
                     rr = mid;
                 else {
                     break;
@@ -430,13 +434,13 @@ class pim_skip_list {
             ll = mmm; rr = rrr;
             while(rr - ll > 1) {
                 mid = (ll + rr) >> 1;
-                if(rkey < kv_set[mid].key)
+                if(rkey <= kv_set[mid].key)
                     rr = mid;
                 else
                     ll = mid;
             }
-            if(ll >= kv_num - 1)
-                res_rr = kv_num;
+            if(ll >= kv_n - 1)
+                res_rr = kv_n;
             else if(kv_set[ll + 1].key <= rkey)
                 res_rr = ll + 2;
             else
@@ -444,7 +448,6 @@ class pim_skip_list {
             return std::make_pair(res_ll, res_rr);
         });
         time_end("reassemble_result");
-        cout<<"Scan: "<<nn<<" "<<kv_num<<endl;
         return make_pair(kv_set, index_set);
     }
 };
