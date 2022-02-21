@@ -10,7 +10,7 @@
 // Range Scan
 
 // MRAM Buffer Size
-#define M_BUFFER_SIZE (LX_BUFFER_SIZE / sizeof(bnode) << 2)
+#define M_BUFFER_SIZE ((LX_BUFFER_SIZE / sizeof(bnode)) << 2)
 #define VARLEN_BUFFER_SIZE (64)
 __mram_noinit int64_t mrambuffer[M_BUFFER_SIZE];
 
@@ -51,10 +51,7 @@ static inline void varlen_buffer_push(varlen_buffer* buf, int64_t v) {
 
 static inline void varlen_buffer_to_mram(varlen_buffer* buf, mpint64_t mptr) {
     m_write(buf->ptr, (mptr + buf->len - buf->llen), S64(buf->llen));
-    for(int64_t i = 0; i < buf->len; i += buf->capacity) {
-        m_read((buf->ptr_mram + buf->capacity), buf->ptr, S64(buf->capacity));
-        m_write(buf->ptr, (mptr + buf->capacity), S64(buf->capacity));
-    }
+    mram_to_mram(mptr, buf->ptr_mram, S64(buf->len - buf->llen));
 }
 
 static inline void varlen_buffer_reset(varlen_buffer* buf) {
