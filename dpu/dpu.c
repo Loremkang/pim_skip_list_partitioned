@@ -45,6 +45,12 @@ void *bufferA_shared, *bufferB_shared;
 int8_t *max_height_shared;
 uint32_t *newnode_size;
 
+#ifdef DPU_ENERGY
+__host uint64_t op_count = 0;
+__host uint64_t db_size_count = 0;
+__host uint64_t cycle_count = 0;
+#endif
+
 static inline void dpu_init(dpu_init_task *it) {
     DPU_ID = it->dpu_id;
     l3cnt = 8;
@@ -147,6 +153,28 @@ void exec_L3_get_min_task(int lft, int rt) {
     push_fixed_reply(0, &tgmr);
 }
 
+// Range Scan
+void exec_L3_scan_task(int lft, int rt) {
+    uint32_t tasklet_id = me();
+    init_block_with_type(L3_scan_task, L3_scan_reply);
+    init_task_reader(lft);
+    varlen_buffer *key_buf, *val_buf;
+    key_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer);
+    val_buf = varlen_buffer_new(VARLEN_BUFFER_SIZE, mrambuffer + (M_BUFFER_SIZE >> 1));
+    int64_t len;
+    L3_scan_task* tsct;
+    mpint64_t rep;
+    for (int i = lft; i < rt; i ++) {
+        tsct = (L3_scan_task*)get_task_cached(i);
+        len = L3_scan(tsct->lkey, tsct->rkey, key_buf, val_buf);
+        IN_DPU_ASSERT((len == key_buf->len && len == val_buf->len), "ScanErr\n");
+        rep = (mpint64_t)push_variable_reply_zero_copy(tasklet_id, S64((len << 1) + 1));
+        rep[0] = len;
+        varlen_buffer_to_mram(key_buf, rep + 1);
+        varlen_buffer_to_mram(val_buf, rep + 1 + len);
+    }
+}
+
 void execute(int lft, int rt) {
     uint32_t tid = me();
     switch (recv_block_task_type) {
@@ -176,6 +204,11 @@ void execute(int lft, int rt) {
         }
         case L3_get_min_task_id: {
             exec_L3_get_min_task(lft, rt);
+            break;
+        }
+        // Range Scan
+        case L3_scan_task_id: {
+            exec_L3_scan_task(lft, rt);
             break;
         }
         default: {
