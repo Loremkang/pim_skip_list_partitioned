@@ -15,6 +15,7 @@ class pim_skip_list {
     static parlay::sequence<int64_t> key_split;
     static parlay::sequence<int64_t> min_key;
     // static int64_t min_key[NR_DPUS + 10];
+    static int max_height;
 
    private:
     static void init_splits() {
@@ -113,10 +114,6 @@ class pim_skip_list {
         assert(false);
         // return false;
     }
-    static void scan(slice<scan_operation*, scan_operation*> ops) {
-        assert(false);
-        // return false;
-    }
     static auto predecessor(slice<int64_t*, int64_t*> keys) {
         int n = keys.size();
         auto splits = make_slice(min_key);
@@ -194,8 +191,7 @@ class pim_skip_list {
             batch->push_task_sorted(
                 n, nr_of_dpus,
                 [&](size_t i) {
-                    return (L3_insert_task){
-                        return (L3_insert_task){{.key = kv_sorted[i].key,
+                    return (L3_insert_task){{.key = kv_sorted[i].key,
                                              .value = kv_sorted[i].value,
                                              .height = heights[i]}};
                 },
@@ -261,6 +257,12 @@ class pim_skip_list {
         time_nested("exec", [&]() { ASSERT(!io->exec()); });
         io->reset();
         return;
+    }
+
+    static auto scan(slice<scan_operation*, scan_operation*> ops) {
+        auto kvs = parlay::sequence<key_value>(1);
+        auto ids = parlay::sequence<pair<int64_t, int64_t>>(1);
+        return std::make_pair(kvs, ids);
     }
 };
 
