@@ -8,6 +8,9 @@
 #include <alloc.h>
 // #include <profiling.h>
 
+// Range Scan
+#include "data_block.h"
+
 // PROFILING_INIT(prof_newnode);
 // PROFILING_INIT(prof_internal);
 // PROFILING_INIT(prof_external);
@@ -439,4 +442,40 @@ static inline void L3_sancheck() {
             r = tmp->right[i];
         }
     }
+}
+
+// Range Scan
+static inline int64_t L3_scan(int64_t lkey, int64_t rkey,
+                              varlen_buffer *key_buf, varlen_buffer *val_buf) {
+    varlen_buffer_reset(key_buf);
+    varlen_buffer_reset(val_buf);
+    int64_t num = 0;
+    mL3ptr tmp = root;
+    int64_t ht = root->height - 1;
+    while (ht >= 0) {
+        pptr r = tmp->right[ht];
+        if (r.id != INVALID_DPU_ID && ((mL3ptr)r.addr)->key <= lkey) {
+            tmp = (mL3ptr)r.addr;  // go right
+            continue;
+        }
+        ht--;
+    }
+    if(tmp->key >= lkey && tmp->key <= rkey) {
+        num = 1;
+        varlen_buffer_push(key_buf, tmp->key);
+        varlen_buffer_push(val_buf, tmp->value);
+    }
+    ht = 1;
+    while(ht == 1) {
+        pptr r = tmp->right[0];
+        if (r.id != INVALID_DPU_ID && ((mL3ptr)r.addr)->key <= rkey) {
+            tmp = (mL3ptr)r.addr;  // go right
+            num++;
+            varlen_buffer_push(key_buf, tmp->key);
+            varlen_buffer_push(val_buf, tmp->value);
+            continue;
+        }
+        ht = 0;
+    }
+    return num;
 }
