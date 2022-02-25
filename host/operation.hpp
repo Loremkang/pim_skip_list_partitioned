@@ -30,6 +30,8 @@ class pim_skip_list {
     static void dpu_energy_stats(bool flag = false) {
 #ifdef DPU_ENERGY
         uint64_t db_iter=0, op_iter=0, cycle_iter=0, instr_iter=0;
+        cout<<"Before: "<<op_total<<" "<<db_size_total<<" "<<cycle_total<<" "<<endl;
+        op_total = 0, db_size_total = 0, cycle_total = 0;
         DPU_FOREACH(dpu_set, dpu, each_dpu) {
             DPU_ASSERT(dpu_copy_from(dpu, "op_count", 0, &op_iter, sizeof(uint64_t)));
             DPU_ASSERT(dpu_copy_from(dpu, "db_size_count", 0, &db_iter, sizeof(uint64_t)));
@@ -42,7 +44,7 @@ class pim_skip_list {
                 cout<<((op_iter > 0) ? (db_iter / op_iter) : 0)<<" "<<cycle_iter<<endl;
             }
         }
-        cout<<op_total<<" "<<db_size_total<<" "<<cycle_total<<" "<<endl;
+        cout<<"After: "<<op_total<<" "<<db_size_total<<" "<<cycle_total<<" "<<endl;
 #endif
     }
 
