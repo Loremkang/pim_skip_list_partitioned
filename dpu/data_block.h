@@ -10,7 +10,7 @@
 // Range Scan
 
 // MRAM Buffer Size
-#define M_BUFFER_SIZE ((LX_BUFFER_SIZE / sizeof(bnode)) << 2)
+// #define M_BUFFER_SIZE ((LX_BUFFER_SIZE / sizeof(bnode)) << 2)
 #define VARLEN_BUFFER_SIZE (64)
 __mram_noinit int64_t mrambuffer[M_BUFFER_SIZE];
 

@@ -161,16 +161,52 @@ class pim_skip_list {
         parlay::scan_inclusive_inplace(target, parlay::maxm<int>());
     }
 
-    static auto get(slice<int64_t*, int64_t*> ops) {
-        assert(false);
-        return parlay::sequence<int64_t>(ops.size(), 0);
+    static auto get(slice<int64_t*, int64_t*> keys) {
+        int n = keys.size();
+        auto splits = make_slice(min_key);
+
+        time_start("find_target");
+        auto target = parlay::tabulate(
+            n, [&](size_t i) { return find_target(keys[i], splits); });
+        time_end("find_target");
+
+        IO_Manager* io;
+        IO_Task_Batch* batch;
+
+        auto location = parlay::sequence<int>(n);
+        time_nested("taskgen", [&]() {
+            io = alloc_io_manager();
+            io->init();
+            batch = io->alloc<L3_get_task, L3_get_reply>(direct);
+            time_nested("push_task", [&]() {
+                batch->push_task_from_array_by_isort<false>(
+                    n,
+                    [&](size_t i) { return (L3_get_task){.key = keys[i]}; },
+                    make_slice(target), make_slice(location));
+            });
+            io->finish_task_batch();
+        });
+
+        time_nested("exec", [&]() { ASSERT(io->exec()); });
+        time_start("get_result");
+        auto result = parlay::tabulate(n, [&](size_t i) {
+            auto reply = (L3_get_reply*)batch->ith(target[i], location[i]);
+            if (reply->valid == 1) {
+                return (key_value){.key = keys[i], .value = reply->value};
+            } else {
+                return (key_value){.key = INT64_MIN, .value = INT64_MIN};
+            }
+        });
+        time_end("get_result");
+        io->reset();
+        return result;
         // return false;
     }
     static void update(slice<key_value*, key_value*> ops) {
         assert(false);
         // return false;
     }
-    
+
     static auto predecessor(slice<int64_t*, int64_t*> keys) {
         int n = keys.size();
         auto splits = make_slice(min_key);
@@ -308,23 +344,25 @@ class pim_skip_list {
     static auto scan(slice<scan_operation*, scan_operation*> op_set) {
         int n = op_set.size();
         time_start("merge_range");
-        auto ops = parlay::sort(op_set, [&](scan_operation s1, scan_operation s2) -> bool {
-            return (s1.lkey < s2.lkey) ||
-                ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
-        });
-        auto range_prefix_scan = parlay::scan(ops, scan_op_rkey_nlt<scan_operation>());
+        auto ops = parlay::sort(
+            op_set, [&](scan_operation s1, scan_operation s2) -> bool {
+                return (s1.lkey < s2.lkey) ||
+                       ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
+            });
+        auto range_prefix_scan =
+            parlay::scan(ops, scan_op_rkey_nlt<scan_operation>());
         auto range_prefix_sum = range_prefix_scan.first;
         auto scan_start_arr = parlay::tabulate(n, [&](size_t i) -> bool {
             return (i == 0) || (range_prefix_sum[i].rkey < ops[i].lkey);
         });
         auto scan_start = parlay::pack_index(scan_start_arr);
         int nn = scan_start.size();
-        auto ops_merged = parlay::tabulate(nn, [&](int i){
+        auto ops_merged = parlay::tabulate(nn, [&](int i) {
             return make_scan_op<scan_operation>(
                 ops[scan_start[i]].lkey,
-                ( (i != nn - 1) ? range_prefix_sum[scan_start[i + 1]].rkey :
-                max(range_prefix_sum[n - 1].rkey, ops[n - 1].rkey) )
-            );
+                ((i != nn - 1)
+                     ? range_prefix_sum[scan_start[i + 1]].rkey
+                     : max(range_prefix_sum[n - 1].rkey, ops[n - 1].rkey)));
         });
         time_end("merge_range");
 
@@ -333,7 +371,7 @@ class pim_skip_list {
         auto target = parlay::tabulate(nn, [&](size_t i) {
             return find_range_target(ops_merged[i], splits);
         });
-        
+
         IO_Manager* io;
         IO_Task_Batch* batch;
         auto node_nums = parlay::tabulate(nn, [&](size_t i) {
@@ -347,21 +385,21 @@ class pim_skip_list {
         auto node_num_prefix_sum = node_num_prefix_scan.first;
         time_end("find_target");
 
-        time_nested("taskgen", [&](){
+        time_nested("taskgen", [&]() {
             parlay::parallel_for(0, nn, [&](size_t i) {
-                for(int j = 0; j < node_nums[i]; j++) {
-                    target_scan[node_num_prefix_sum[i] + j] = target[i].first + j;
-                    ops_scan[node_num_prefix_sum[i] + j] = make_scan_op(
-                        ops_merged[i].lkey, ops_merged[i].rkey
-                    );
+                for (int j = 0; j < node_nums[i]; j++) {
+                    target_scan[node_num_prefix_sum[i] + j] =
+                        target[i].first + j;
+                    ops_scan[node_num_prefix_sum[i] + j] =
+                        make_scan_op(ops_merged[i].lkey, ops_merged[i].rkey);
                 }
             });
             io = alloc_io_manager();
             io->init();
             batch = io->alloc<L3_scan_task, L3_scan_reply>(direct);
-            time_nested("push_task", [&](){
+            time_nested("push_task", [&]() {
                 batch->push_task_from_array_by_isort<false>(
-                    node_num, [&](size_t i) {return ops_scan[i];},
+                    node_num, [&](size_t i) { return ops_scan[i]; },
                     make_slice(target_scan), make_slice(location));
             });
             io->finish_task_batch();
@@ -371,41 +409,46 @@ class pim_skip_list {
 
         time_start("get_result");
         auto kv_nums = parlay::tabulate(node_num, [&](size_t i) {
-            auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
+            auto reply =
+                (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
             return (reply->length);
         });
         auto kv_nums_prefix_scan = parlay::scan(kv_nums);
         auto kv_num = kv_nums_prefix_scan.second;
         auto kv_nums_prefix_sum = kv_nums_prefix_scan.first;
         auto kv_set1 = parlay::sequence<key_value>(kv_num);
-        parlay::parallel_for(0, node_num, [&](size_t i){
-            auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
-            for(int j = 0; j < kv_nums[i]; j++) {
+        parlay::parallel_for(0, node_num, [&](size_t i) {
+            auto reply =
+                (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
+            for (int j = 0; j < kv_nums[i]; j++) {
                 kv_set1[kv_nums_prefix_sum[i] + j].key = reply->vals[j];
-                kv_set1[kv_nums_prefix_sum[i] + j].value = reply->vals[j + reply->length];
+                kv_set1[kv_nums_prefix_sum[i] + j].value =
+                    reply->vals[j + reply->length];
             }
         });
         time_end("get_result");
         io->reset();
 
         time_start("reassemble_result");
-        parlay::sort_inplace(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-            return (kv1.key < kv2.key) ||
-                ((kv1.key == kv2.key) && (kv1.value < kv2.value));
-        });
-        auto kv_set = parlay::unique(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-            return (kv1.key == kv2.key);
-        });
+        parlay::sort_inplace(
+            kv_set1, [&](key_value kv1, key_value kv2) -> bool {
+                return (kv1.key < kv2.key) ||
+                       ((kv1.key == kv2.key) && (kv1.value < kv2.value));
+            });
+        auto kv_set =
+            parlay::unique(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
+                return (kv1.key == kv2.key);
+            });
         auto kv_n = kv_set.size();
-        auto index_set = parlay::tabulate(n, [&](size_t i){
+        auto index_set = parlay::tabulate(n, [&](size_t i) {
             int ll = 0, rr = kv_n;
             int64_t lkey = op_set[i].lkey, rkey = op_set[i].rkey;
             int mid, res_ll, res_rr;
-            while(rr - ll > 1) {
+            while (rr - ll > 1) {
                 mid = (ll + rr) >> 1;
-                if(lkey >= kv_set[mid].key)
+                if (lkey >= kv_set[mid].key)
                     ll = mid;
-                else if(rkey < kv_set[mid].key)
+                else if (rkey < kv_set[mid].key)
                     rr = mid;
                 else {
                     break;
@@ -413,30 +456,32 @@ class pim_skip_list {
             }
             int lll = ll, rrr = rr, mmm = mid;
 
-            ll = lll; rr = mmm;
-            while(rr - ll > 1) {
+            ll = lll;
+            rr = mmm;
+            while (rr - ll > 1) {
                 mid = (ll + rr) >> 1;
-                if(lkey < kv_set[mid].key)
+                if (lkey < kv_set[mid].key)
                     rr = mid;
                 else
                     ll = mid;
             }
-            if(lkey <= kv_set[ll].key)
+            if (lkey <= kv_set[ll].key)
                 res_ll = ll;
             else
                 res_ll = ll + 1;
-            
-            ll = mmm; rr = rrr;
-            while(rr - ll > 1) {
+
+            ll = mmm;
+            rr = rrr;
+            while (rr - ll > 1) {
                 mid = (ll + rr) >> 1;
-                if(rkey <= kv_set[mid].key)
+                if (rkey <= kv_set[mid].key)
                     rr = mid;
                 else
                     ll = mid;
             }
-            if(ll >= kv_n - 1)
+            if (ll >= kv_n - 1)
                 res_rr = kv_n;
-            else if(kv_set[ll + 1].key <= rkey)
+            else if (kv_set[ll + 1].key <= rkey)
                 res_rr = ll + 2;
             else
                 res_rr = ll + 1;

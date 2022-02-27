@@ -13,7 +13,14 @@
 #define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)
 
 // L0,1,2,3 50MB
-#define LX_BUFFER_SIZE (25 << 20)
+#define LX_BUFFER_SIZE (30 << 20)
+
+#define P_BUFFER_SIZE (100)
+
+#define L3_TEMP_BUFFER_SIZE (120000)
+
+#define MRAM_BUFFER_SIZE (8 * L3_TEMP_BUFFER_SIZE)
+#define M_BUFFER_SIZE (MRAM_BUFFER_SIZE)
 
 // HASH TABLE 8MB. should be power of 2
 #define LX_HASHTABLE_SIZE ((8 << 20) >> 3)

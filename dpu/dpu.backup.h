@@ -58,7 +58,6 @@ __host int64_t dpu_epoch_number;
 __host int64_t dpu_task_type;
 __host int64_t dpu_task_count;
 
-#define MRAM_BUFFER_SIZE (128)
 void *bufferA_shared, *bufferB_shared;
 int8_t *max_height_shared;
 uint32_t *newnode_size;

@@ -33,25 +33,30 @@ static inline void storage_init() {
         return;
     }
     storage_inited = true;
+    l3htcnt = 0;
     ht_slot hs = null_ht_slot;
     for (int i = 0; i < LX_HASHTABLE_SIZE; i++) {
         l3ht[i] = hs;
     }
     // L3_gc_init();
 }
-static inline void ht_insert(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
+
+static inline int32_t ht_insert(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
                              uint32_t val) {
     mutex_lock(ht_lock);
     int ipos = pos;
-    ht_slot hs = ht[pos];
+    ht_slot hs;
+    mram_read(ht + pos, &hs, sizeof(ht_slot));
     while (hs.v != 0) {  // find slot
         pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
-        hs = ht[pos];
+        mram_read(ht + pos, &hs, sizeof(ht_slot));
         IN_DPU_ASSERT(pos != ipos, "htisnert: full\n");
     }
-    ht[pos] = (ht_slot){.pos = ipos, .v = val};
+    ht_slot hh = (ht_slot){.pos = ipos, .v = val};
+    mram_write(&hh, ht + pos, sizeof(ht_slot));
     *cnt = *cnt + 1;
     mutex_unlock(ht_lock);
+    return pos;
 }
 
 static inline bool ht_no_greater_than(int a, int b) {  // a <= b with wrapping

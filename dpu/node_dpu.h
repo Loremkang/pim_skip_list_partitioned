@@ -15,7 +15,13 @@ typedef struct bnode {
     pptr addrs[DB_SIZE];
 } bnode;
 
+typedef struct Pnode {
+    int64_t key;
+    int64_t value;
+} Pnode;
+
 typedef __mram_ptr struct bnode* mBptr;
+typedef __mram_ptr struct Pnode* mPptr;
 
 // extern mL3ptr root;
 extern mBptr root;

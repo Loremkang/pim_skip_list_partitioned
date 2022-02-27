@@ -227,16 +227,20 @@ static inline int get_r(mppptr addrs, int n, int l) {
     return r;
 }
 
-#define L3_TEMP_BUFFER_SIZE (50000)
-__mram_noinit int64_t mod_keys[L3_TEMP_BUFFER_SIZE];
-__mram_noinit pptr mod_values[L3_TEMP_BUFFER_SIZE];
-__mram_noinit pptr mod_addrs[L3_TEMP_BUFFER_SIZE];
-__mram_noinit int64_t mod_type[L3_TEMP_BUFFER_SIZE];
+mpint64_t mod_keys, mod_keys2;
+mppptr mod_values, mod_values2;
+mppptr mod_addrs, mod_addrs2;
+mpint64_t mod_type, mod_type2;
 
-__mram_noinit int64_t mod_keys2[L3_TEMP_BUFFER_SIZE / 4];
-__mram_noinit pptr mod_values2[L3_TEMP_BUFFER_SIZE / 4];
-__mram_noinit pptr mod_addrs2[L3_TEMP_BUFFER_SIZE / 4];
-__mram_noinit int64_t mod_type2[L3_TEMP_BUFFER_SIZE / 4];
+// __mram_noinit int64_t mod_keys[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit pptr mod_values[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit pptr mod_addrs[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit int64_t mod_type[L3_TEMP_BUFFER_SIZE];
+
+// __mram_noinit int64_t mod_keys2[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit pptr mod_values2[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit pptr mod_addrs2[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit int64_t mod_type2[L3_TEMP_BUFFER_SIZE];
 
 const int64_t remove_type = 1;
 const int64_t change_key_type = 2;
@@ -523,6 +527,7 @@ void b_remove_onelevel(int n, int tid, int ht) {
 }
 
 const int SERIAL_HEIGHT = 2;
+const int SERIAL_COUNT = 80;
 
 void b_insert_parallel(int n, int l, int r) {
     int tid = me();
@@ -554,7 +559,8 @@ void b_insert_parallel(int n, int l, int r) {
     barrier_wait(&L3_barrier1);
 
     for (int ht = 0; ht <= root->height + 1; ht++) {
-        if (ht < SERIAL_HEIGHT) {
+        // if (ht < SERIAL_HEIGHT) {
+        if (L3_n > SERIAL_COUNT) {
             // distribute work
             n = L3_n;
             if (tid == 0) {
@@ -833,7 +839,8 @@ void b_remove_parallel(int n, int l, int r) {
     barrier_wait(&L3_barrier1);
 
     for (int ht = 0; ht <= root->height; ht++) {
-        if (ht < SERIAL_HEIGHT) {
+        // if (ht < SERIAL_HEIGHT) {
+        if (L3_n > SERIAL_COUNT) {
             // distribute work
             n = L3_n;
             if (tid == 0) {
