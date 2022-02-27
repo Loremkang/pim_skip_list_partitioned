@@ -42,7 +42,8 @@
 // #include "node_dpu.h"
 #include "task_framework_dpu.h"
 
-int *L3_lfts, *L3_rts, *L3_sizes;
+int *L3_lfts, *L3_rts;
+// int *L3_lfts, *L3_rts, *L3_sizes;
 
 #ifdef DPU_ENERGY
 __host uint64_t op_count = 0;
@@ -56,7 +57,7 @@ static inline void dpu_init(dpu_init_task* it) {
     DPU_ID = it->dpu_id;
     bcnt = 1;
     pcnt = 1;
-    storage_init();
+    // storage_init();
 }
 
 void exec_dpu_init_task(int lft, int rt) {
@@ -106,8 +107,8 @@ void exec_L3_search_task(int lft, int rt) {
         mBptr nn;
         pptr addr = null_pptr;
         int64_t key = b_search(tst->key, &nn, &addr);
-        L3_search_reply tsr = (L3_search_reply){.key = key, .value = p_get_value(addr)};
-        // L3_search_reply tsr = (L3_search_reply){.key = key, .value = PPTR_TO_I64(addr)};
+        // L3_search_reply tsr = (L3_search_reply){.key = key, .value = p_get_value(addr)};
+        L3_search_reply tsr = (L3_search_reply){.key = key, .value = PPTR_TO_I64(addr)};
         push_fixed_reply(i, &tsr);
     }
 }
@@ -115,14 +116,14 @@ void exec_L3_search_task(int lft, int rt) {
 void exec_L3_insert_task(int lft, int rt) {
     init_block_with_type(L3_insert_task, empty_task_reply);
     init_task_reader(lft);
-    mPptr pns = reserve_space_p(rt - lft);
+    // mPptr pns = reserve_space_p(rt - lft);
     for (int i = lft; i < rt; i++) {
         L3_insert_task* tit = (L3_insert_task*)get_task_cached(i);
-        p_newnode(tit->key, tit->value, pns);
+        // p_newnode(tit->key, tit->value, pns);
         mod_keys[i] = tit->key;
-        // mod_values[i] = I64_TO_PPTR(tit->value);
-        mod_values[i] = PPTR(DPU_ID, pns);
-        pns ++;
+        mod_values[i] = I64_TO_PPTR(tit->value);
+        // mod_values[i] = PPTR(DPU_ID, pns);
+        // pns ++;
     }
     b_insert_parallel(recv_block_task_cnt, lft, rt);
 }
@@ -132,15 +133,13 @@ void exec_L3_remove_task(int lft, int rt) {
     init_task_reader(lft);
     for (int i = lft; i < rt; i++) {
         L3_remove_task* trt = (L3_remove_task*)get_task_cached(i);
-        p_remove(trt->key);
+        // p_remove(trt->key);
         mod_keys[i] = trt->key;
     }
     b_remove_parallel(recv_block_task_cnt, lft, rt);
 }
 
 void exec_L3_get_min_task(int lft, int rt) {
-    (void)lft;
-    (void)rt;
     init_block_with_type(L3_get_min_task, L3_get_min_reply);
     int64_t key = b_get_min_key();
     L3_get_min_reply tgmr = (L3_get_min_reply){.key = key};
@@ -183,10 +182,10 @@ void execute(int lft, int rt) {
             exec_L3_init_task(lft, rt);
             break;
         }
-        case L3_get_task_id: {
-            exec_L3_get_task(lft, rt);
-            break;
-        }
+        // case L3_get_task_id: {
+        //     exec_L3_get_task(lft, rt);
+        //     break;
+        // }
         case L3_search_task_id: {
             exec_L3_search_task(lft, rt);
             break;
@@ -218,9 +217,9 @@ void execute(int lft, int rt) {
 }
 
 void init() {
-    L3_lfts = mem_alloc(sizeof(int) * NR_TASKLETS);
-    L3_rts = mem_alloc(sizeof(int) * NR_TASKLETS);
-    L3_sizes = mem_alloc(sizeof(int) * NR_TASKLETS);
+    L3_lfts = mem_alloc(2 * sizeof(int) * NR_TASKLETS);
+    L3_rts = L3_lfts + NR_TASKLETS;
+    // L3_sizes = mem_alloc(sizeof(int) * NR_TASKLETS);
     mod_keys = mrambuffer;
     mod_keys2 = mod_keys + L3_TEMP_BUFFER_SIZE;
     mod_values = mod_keys2 + L3_TEMP_BUFFER_SIZE;

@@ -190,12 +190,12 @@ void execute(int l, int r) {
             break;
         }
 
-        case L3_SANCHECK_TSK: {
-            if (tasklet_id == 0) {
-                L3_sancheck();
-            }
-            break;
-        }
+        // case L3_SANCHECK_TSK: {
+        //     if (tasklet_id == 0) {
+        //         L3_sancheck();
+        //     }
+        //     break;
+        // }
 
         default: {
             IN_DPU_ASSERT(false, "Wrong Task Type\n");

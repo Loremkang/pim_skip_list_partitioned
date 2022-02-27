@@ -12,7 +12,7 @@
 MUTEX_INIT(p_lock);
 
 // Bnode
-__mram_ptr Pnode pbuffer[P_BUFFER_SIZE / sizeof(Pnode)];
+__mram_noinit Pnode pbuffer[P_BUFFER_SIZE / sizeof(Pnode)];
 __host uint32_t pcnt = 1;
 // mPptr pbuffer_start, pbuffer_end;
 

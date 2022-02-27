@@ -19,22 +19,22 @@ MUTEX_INIT(L3_lock);
 extern int64_t DPU_ID;
 extern __mram_ptr ht_slot l3ht[];
 
-void print_bnode(mBptr nn) {
-    bnode bn;
-    // mram_read(nn, &bn, sizeof(bnode));
-    m_read(nn, &bn, sizeof(bnode));
-    printf("addr=%x\n", (uint32_t)nn);
-    printf("ht=%lld\tup=%llx\tright=%llx\n", bn.height, pptr_to_int64(bn.up), pptr_to_int64(bn.right));
-    printf("size=%lld\n", bn.size);
-    for (int i = 0; i < DB_SIZE; i++) {
-        if (bn.height > 0) {
-            printf("[%d]:key=%lld\tval=%llx\n", i, bn.keys[i], pptr_to_int64(bn.addrs[i]));
-        } else {
-            printf("[%d]:key=%lld\tval=%lld\n", i, bn.keys[i], pptr_to_int64(bn.addrs[i]));
-        }
-    }
-    printf("\n");
-}
+// void print_bnode(mBptr nn) {
+//     bnode bn;
+//     // mram_read(nn, &bn, sizeof(bnode));
+//     m_read(nn, &bn, sizeof(bnode));
+//     printf("addr=%x\n", (uint32_t)nn);
+//     printf("ht=%lld\tup=%llx\tright=%llx\n", bn.height, pptr_to_int64(bn.up), pptr_to_int64(bn.right));
+//     printf("size=%lld\n", bn.size);
+//     for (int i = 0; i < DB_SIZE; i++) {
+//         if (bn.height > 0) {
+//             printf("[%d]:key=%lld\tval=%llx\n", i, bn.keys[i], pptr_to_int64(bn.addrs[i]));
+//         } else {
+//             printf("[%d]:key=%lld\tval=%lld\n", i, bn.keys[i], pptr_to_int64(bn.addrs[i]));
+//         }
+//     }
+//     printf("\n");
+// }
 
 
 #define RETURN_FALSE(x)   \
@@ -52,66 +52,66 @@ void print_bnode(mBptr nn) {
         }                              \
     }
 
-bool print_tree(mBptr nn) {
-    print_bnode(nn);
-    bnode bn;
-    // mram_read(nn, &bn, sizeof(bnode));
-    m_read(nn, &bn, sizeof(bnode));
-    if (bn.height > 0) {
-        for (int i = 0; i < bn.size; i++) {
-            RETURN_FALSE_PRINT(valid_pptr(bn.addrs[i]), "pt! inv %d", i);
-            RETURN_FALSE(print_tree(pptr_to_mbptr(bn.addrs[i])));
-        }
-    }
-    return true;
-}
+// bool print_tree(mBptr nn) {
+//     print_bnode(nn);
+//     bnode bn;
+//     // mram_read(nn, &bn, sizeof(bnode));
+//     m_read(nn, &bn, sizeof(bnode));
+//     if (bn.height > 0) {
+//         for (int i = 0; i < bn.size; i++) {
+//             RETURN_FALSE_PRINT(valid_pptr(bn.addrs[i]), "pt! inv %d", i);
+//             RETURN_FALSE(print_tree(pptr_to_mbptr(bn.addrs[i])));
+//         }
+//     }
+//     return true;
+// }
 
-bool sancheck(mBptr nn) {
-    bnode bn;
-    // mram_read(nn, &bn, sizeof(bnode));
-    m_read(nn, &bn, sizeof(bnode));
-    for (int i = 1; i < bn.size; i++) {
-        RETURN_FALSE_PRINT(bn.keys[i] > bn.keys[i - 1],
-                           "sc: keyinv %lld %lld\n", bn.keys[i],
-                           bn.keys[i - 1]);
-    }
-    if (bn.height > 0) {
-        for (int i = 0; i < bn.size; i++) {
-            RETURN_FALSE_PRINT(valid_pptr(bn.addrs[i]),
-                               "sc: addrinv %d %llx\n", i,
-                               pptr_to_int64(bn.addrs[i]));
-            mBptr nn = pptr_to_mbptr(bn.addrs[i]);
-            pptr addr = mbptr_to_pptr(nn);
-            RETURN_FALSE_PRINT(equal_pptr(nn->up, addr), "sc: up\n");
-            RETURN_FALSE(sancheck(nn));
-        }
-        for (int i = 0; i < bn.size; i++) {
-            mBptr ch = pptr_to_mbptr(bn.addrs[i]);
-            RETURN_FALSE_PRINT(ch->height == bn.height - 1, "sc: ht\n");
-            RETURN_FALSE_PRINT(ch->size > 0, "sc: empty\n");
-            RETURN_FALSE_PRINT(bn.keys[i] == ch->keys[0],
-                               "sc: wrongkey %lld %lld\n", bn.keys[i],
-                               ch->keys[0]);
-            if (i < bn.size - 1) {
-                RETURN_FALSE_PRINT(ch->keys[ch->size - 1] < bn.keys[i + 1],
-                                   "sc: wrongchkey\n");
-            }
-        }
-        for (int i = 1; i < bn.size; i++) {
-            mBptr l = pptr_to_mbptr(bn.addrs[i - 1]);
-            RETURN_FALSE_PRINT(equal_pptr(l->right, bn.addrs[i]),
-                               "sc: wrongintr\n");
-        }
-        RETURN_FALSE(bn.size > 0);
-        if (valid_pptr(bn.right)) {
-            mBptr r = pptr_to_mbptr(bn.right);
-            mBptr l = pptr_to_mbptr(bn.addrs[bn.size - 1]);
-            RETURN_FALSE_PRINT(equal_pptr(l->right, r->addrs[0]),
-                               "sc: wrongoutr\n");
-        }
-    }
-    return true;
-}
+// bool sancheck(mBptr nn) {
+//     bnode bn;
+//     // mram_read(nn, &bn, sizeof(bnode));
+//     m_read(nn, &bn, sizeof(bnode));
+//     for (int i = 1; i < bn.size; i++) {
+//         RETURN_FALSE_PRINT(bn.keys[i] > bn.keys[i - 1],
+//                            "sc: keyinv %lld %lld\n", bn.keys[i],
+//                            bn.keys[i - 1]);
+//     }
+//     if (bn.height > 0) {
+//         for (int i = 0; i < bn.size; i++) {
+//             RETURN_FALSE_PRINT(valid_pptr(bn.addrs[i]),
+//                                "sc: addrinv %d %llx\n", i,
+//                                pptr_to_int64(bn.addrs[i]));
+//             mBptr nn = pptr_to_mbptr(bn.addrs[i]);
+//             pptr addr = mbptr_to_pptr(nn);
+//             RETURN_FALSE_PRINT(equal_pptr(nn->up, addr), "sc: up\n");
+//             RETURN_FALSE(sancheck(nn));
+//         }
+//         for (int i = 0; i < bn.size; i++) {
+//             mBptr ch = pptr_to_mbptr(bn.addrs[i]);
+//             RETURN_FALSE_PRINT(ch->height == bn.height - 1, "sc: ht\n");
+//             RETURN_FALSE_PRINT(ch->size > 0, "sc: empty\n");
+//             RETURN_FALSE_PRINT(bn.keys[i] == ch->keys[0],
+//                                "sc: wrongkey %lld %lld\n", bn.keys[i],
+//                                ch->keys[0]);
+//             if (i < bn.size - 1) {
+//                 RETURN_FALSE_PRINT(ch->keys[ch->size - 1] < bn.keys[i + 1],
+//                                    "sc: wrongchkey\n");
+//             }
+//         }
+//         for (int i = 1; i < bn.size; i++) {
+//             mBptr l = pptr_to_mbptr(bn.addrs[i - 1]);
+//             RETURN_FALSE_PRINT(equal_pptr(l->right, bn.addrs[i]),
+//                                "sc: wrongintr\n");
+//         }
+//         RETURN_FALSE(bn.size > 0);
+//         if (valid_pptr(bn.right)) {
+//             mBptr r = pptr_to_mbptr(bn.right);
+//             mBptr l = pptr_to_mbptr(bn.addrs[bn.size - 1]);
+//             RETURN_FALSE_PRINT(equal_pptr(l->right, r->addrs[0]),
+//                                "sc: wrongoutr\n");
+//         }
+//     }
+//     return true;
+// }
 
 static inline void b_node_init(bnode *bn, int ht, pptr up, pptr right) {
     bn->height = ht;
@@ -359,23 +359,23 @@ void b_insert_onelevel(int n, int tid, int ht) {
                 nxtrt++;
                 IN_DPU_ASSERT_EXEC(bn.keys[0] != INT64_MIN, {
                     printf("mod_keys2 = INT64_MIN\n");
-                    printf("bbuffer=%x bcnt=%d\n", bbuffer, bcnt);
-                    printf("ht=%d addr=%x\n", ht, nn0);
-                    printf("l=%d\tr=%d\tnnl=%d\n", l0, r, nnl);
-                    printf("i=%d\ttotsize=%d\n", i, totsize);
-                    for (int x = 0; x < nnsize; x++) {
-                        printf("nn[%d]=%lld\n", x, nnkeys[x]);
-                    }
-                    // mram_read(nn0, &bn, sizeof(bnode));
-                    m_read(nn0, &bn, sizeof(bnode));
-                    printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
-                    for (int x = 0; x < bn.size; x++) {
-                        printf("nn0[%d]=%lld\n", x, bn.keys[x]);
-                    }
-                    for (int x = l0; x < r; x++) {
-                        printf("mod[%d]=%lld\n", x, mod_keys[x]);
-                    }
-                    printf("i=%d\ttotsize=%d\n", i, totsize);
+                    // printf("bbuffer=%x bcnt=%d\n", bbuffer, bcnt);
+                    // printf("ht=%d addr=%x\n", ht, nn0);
+                    // printf("l=%d\tr=%d\tnnl=%d\n", l0, r, nnl);
+                    // printf("i=%d\ttotsize=%d\n", i, totsize);
+                    // for (int x = 0; x < nnsize; x++) {
+                    //     printf("nn[%d]=%lld\n", x, nnkeys[x]);
+                    // }
+                    // // mram_read(nn0, &bn, sizeof(bnode));
+                    // m_read(nn0, &bn, sizeof(bnode));
+                    // printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
+                    // for (int x = 0; x < bn.size; x++) {
+                    //     printf("nn0[%d]=%lld\n", x, bn.keys[x]);
+                    // }
+                    // for (int x = l0; x < r; x++) {
+                    //     printf("mod[%d]=%lld\n", x, mod_keys[x]);
+                    // }
+                    // printf("i=%d\ttotsize=%d\n", i, totsize);
                 });
             }
             if (bn.size == DB_SIZE ||
@@ -406,23 +406,23 @@ void b_insert_onelevel(int n, int tid, int ht) {
             if (nnl == nnsize && l == r) {
                 IN_DPU_ASSERT_EXEC(i + 1 == totsize, {
                     printf("i+1 != totsize\n");
-                    printf("bbuffer=%x bcnt=%d\n", bbuffer, bcnt);
-                    printf("ht=%d addr=%x\n", ht, nn0);
-                    printf("l=%d\tr=%d\tnnl=%d\n", l0, r, nnl);
-                    printf("i=%d\ttotsize=%d\n", i, totsize);
-                    for (int x = 0; x < nnsize; x++) {
-                        printf("nn[%d]=%lld\n", x, nnkeys[x]);
-                    }
-                    // mram_read(nn0, &bn, sizeof(bnode));
-                    m_read(nn0, &bn, sizeof(bnode));
-                    printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
-                    for (int x = 0; x < bn.size; x++) {
-                        printf("nn0[%d]=%lld\n", x, bn.keys[x]);
-                    }
-                    for (int x = l0; x < r; x++) {
-                        printf("mod[%d]=%lld\n", x, mod_keys[x]);
-                    }
-                    printf("i=%d\ttotsize=%d\n", i, totsize);
+                    // printf("bbuffer=%x bcnt=%d\n", bbuffer, bcnt);
+                    // printf("ht=%d addr=%x\n", ht, nn0);
+                    // printf("l=%d\tr=%d\tnnl=%d\n", l0, r, nnl);
+                    // printf("i=%d\ttotsize=%d\n", i, totsize);
+                    // for (int x = 0; x < nnsize; x++) {
+                    //     printf("nn[%d]=%lld\n", x, nnkeys[x]);
+                    // }
+                    // // mram_read(nn0, &bn, sizeof(bnode));
+                    // m_read(nn0, &bn, sizeof(bnode));
+                    // printf("nn0size=%lld nnsize=%d\n", bn.size, nnsize);
+                    // for (int x = 0; x < bn.size; x++) {
+                    //     printf("nn0[%d]=%lld\n", x, bn.keys[x]);
+                    // }
+                    // for (int x = l0; x < r; x++) {
+                    //     printf("mod[%d]=%lld\n", x, mod_keys[x]);
+                    // }
+                    // printf("i=%d\ttotsize=%d\n", i, totsize);
                 });
             }
         }
@@ -880,7 +880,7 @@ void b_remove_parallel(int n, int l, int r) {
                         n++;
                     }
                 }
-                printf("n=%d\n", n);
+                // printf("n=%d\n", n);
                 // print_array("mod_keys", mod_keys, n);
                 // print_array("mod_values", (int64_t *)mod_values, n);
                 // print_array("mod_addrs", (int64_t *)mod_addrs, n, true);
@@ -903,7 +903,7 @@ void b_remove_parallel(int n, int l, int r) {
             barrier_wait(&L3_barrier1);
         } else {
             if (tid == 0 && n > 0) {
-                printf("SOLO:%d\n", n);
+                // printf("SOLO:%d\n", n);
                 L3_lfts[0] = 0;
                 L3_rts[0] = n;
                 b_remove_onelevel(n, tid, ht);
