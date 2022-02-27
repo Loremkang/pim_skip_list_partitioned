@@ -26,3 +26,9 @@ typedef struct L3node {
 typedef __mram_ptr struct L3node* mL3ptr;
 
 extern mL3ptr root;
+
+#ifdef DPU_ENERGY
+extern uint64_t op_count;
+extern uint64_t db_size_count;
+extern uint64_t cycle_count;
+#endif
