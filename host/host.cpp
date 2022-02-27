@@ -45,7 +45,7 @@ using namespace std;
 void init_dpus() {
     printf("\n********** INIT DPUS **********\n");
     auto io = alloc_io_manager();
-    ASSERT(io == &io_managers[0]);
+    ASSERT(io == io_managers[0]);
     io->init();
     IO_Task_Batch* batch = io->alloc<dpu_init_task, empty_task_reply>(direct);
 

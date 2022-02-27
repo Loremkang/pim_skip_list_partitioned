@@ -107,7 +107,8 @@ class pim_skip_list {
 
     static auto get(slice<int64_t*, int64_t*> ops) {
         assert(false);
-        return parlay::sequence<int64_t>(ops.size(), 0);
+        key_value x;
+        return parlay::sequence<key_value>(ops.size(), x);
         // return false;
     }
     static void update(slice<key_value*, key_value*> ops) {
