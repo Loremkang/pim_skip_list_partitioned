@@ -92,8 +92,10 @@ static inline void print_nodes(int length, mL3ptr *newnode, bool quit,
 }
 
 #define L3_TEMP_BUFFER_SIZE (500000)
-__mram_noinit int64_t newnode_buffer[L3_TEMP_BUFFER_SIZE];
-__mram_noinit int64_t height_buffer[L3_TEMP_BUFFER_SIZE];
+mpint64_t newnode_buffer;
+mpint64_t height_buffer;
+// __mram_noinit int64_t newnode_buffer[L3_TEMP_BUFFER_SIZE];
+// __mram_noinit int64_t height_buffer[L3_TEMP_BUFFER_SIZE];
 
 static inline void L3_insert_parallel(int length, int l,
                                       __mram_ptr L3_insert_task *mram_tit,

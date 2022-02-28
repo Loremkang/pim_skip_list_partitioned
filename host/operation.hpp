@@ -179,6 +179,10 @@ void update(slice<key_value*, key_value*> ops) {
     // return false;
 }
 auto predecessor(slice<int64_t*, int64_t*> keys) {
+    // dpu_control::print_log([&](size_t i) {
+    //     return i < 10;
+    // });
+    // exit(0);
     int n = keys.size();
     auto splits = make_slice(min_key);
 
@@ -304,6 +308,12 @@ void remove(slice<int64_t*, int64_t*> keys) {
                      make_slice(key_split));
     });
 
+    cout<<n<<endl;
+    for (int i = 0; i < n; i += 1000) {
+        cout<<i<<' '<<keys_sorted[i]<<' '<<target[i]<<endl;
+    }
+    assert(false);
+
     auto location = parlay::sequence<int>(n);
     time_nested("taskgen", [&]() {
         io = alloc_io_manager();
@@ -315,8 +325,9 @@ void remove(slice<int64_t*, int64_t*> keys) {
             [&](size_t i) { return target[i]; }, make_slice(location));
         io->finish_task_batch();
     });
-    time_nested("exec", [&]() { ASSERT(!io->exec()); });
+    // time_nested("exec", [&]() { ASSERT(!io->exec()); });
     io->reset();
+    cout<<"remove finished!"<<endl;
     return;
 }
 

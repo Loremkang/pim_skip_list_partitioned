@@ -221,6 +221,7 @@ void execute(int lft, int rt) {
 }
 
 void init() {
+    // printf("l3cnt=%d l3htcnt=%d\n", l3cnt, l3htcnt);
     bufferA_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
     bufferB_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
     max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);
@@ -228,6 +229,8 @@ void init() {
     for (int i = 0; i < NR_TASKLETS; i++) {
         max_height_shared[i] = 0;
     }
+    newnode_buffer = mrambuffer;
+    height_buffer = mrambuffer + L3_TEMP_BUFFER_SIZE;
 }
 
 int main() {
