@@ -1,7 +1,10 @@
 #pragma once
 
-#include "task.h"
+// #include "task.h"
 // #define KHB_DEBUG
+
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (2000 << 10) // 2 MB
+#define MAX_TASK_COUNT_PER_DPU_PER_BLOCK ((1000 << 10) >> 3) // 1 MB = 125 K
 
 #define MAX_L3_HEIGHT (20)
 
