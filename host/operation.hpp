@@ -14,7 +14,9 @@ using namespace std;
 using namespace parlay;
 
 class pim_skip_list {
+
    public:
+    static bool init_state;
     // static int64_t key_split[NR_DPUS + 10];
     static parlay::sequence<int64_t> key_split;
     static parlay::sequence<int64_t> min_key;
@@ -496,6 +498,7 @@ class pim_skip_list {
 
 parlay::sequence<int64_t> pim_skip_list::key_split;
 parlay::sequence<int64_t> pim_skip_list::min_key;
+bool pim_skip_list::init_state = false;
 
 #ifdef DPU_ENERGY
 uint64_t pim_skip_list::op_total;
