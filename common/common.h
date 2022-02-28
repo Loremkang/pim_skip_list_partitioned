@@ -1,6 +1,6 @@
 #pragma once
 
-#include "task.h"
+// #include "task.h"
 // #define KHB_DEBUG
 
 #define MAX_L3_HEIGHT (20)
@@ -10,7 +10,11 @@
 
 /* Size of the buffer on which the checksum will be performed */
 // #define BUFFER_SIZE (200)
-#define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)
+// #define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)
+#define BATCH_SIZE (2100000)
+
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (2000 << 10) // 2 MB
+#define MAX_TASK_COUNT_PER_DPU_PER_BLOCK ((1000 << 10) >> 3) // 1 MB = 125 K
 
 // L0,1,2,3 50MB
 #define LX_BUFFER_SIZE (20 << 20)
