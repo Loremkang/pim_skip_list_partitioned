@@ -168,10 +168,49 @@ void find_targets(slice<IntIterator1, IntIterator1> in,
     parlay::scan_inclusive_inplace(target, parlay::maxm<int>());
 }
 
-auto get(slice<int64_t*, int64_t*> ops) {
-    assert(false);
-    key_value x;
-    return parlay::sequence<key_value>(ops.size(), x);
+auto get(slice<int64_t*, int64_t*> keys) {
+    int n = keys.size();
+    auto splits = make_slice(min_key);
+
+    time_start("find_target");
+    auto target = parlay::tabulate(
+        n, [&](size_t i) { return find_target(keys[i], splits); });
+    time_end("find_target");
+
+    IO_Manager* io;
+    IO_Task_Batch* batch;
+
+    auto location = parlay::sequence<int>(n);
+    time_nested("taskgen", [&]() {
+        io = alloc_io_manager();
+        io->init();
+        batch = io->alloc<L3_get_task, L3_get_reply>(direct);
+        time_nested("push_task", [&]() {
+            batch->push_task_from_array_by_isort<false>(
+                n, [&](size_t i) { return (L3_get_task){.key = keys[i]}; },
+                make_slice(target), make_slice(location));
+        });
+        io->finish_task_batch();
+    });
+
+    time_nested("exec", [&]() { ASSERT(io->exec()); });
+    time_start("get_result");
+    auto result = parlay::tabulate(n, [&](size_t i) {
+        auto reply = (L3_get_reply*)batch->ith(target[i], location[i]);
+        if (reply->valid == 1) {
+            return (key_value){.key = keys[i], .value = reply->value};
+        } else {
+            return (key_value){.key = INT64_MIN, .value = INT64_MIN};
+        }
+    });
+    time_end("get_result");
+    io->reset();
+    return result;
+    // return false;
+
+    // assert(false);
+    // key_value x;
+    // return parlay::sequence<key_value>(ops.size(), x);
     // return false;
 }
 void update(slice<key_value*, key_value*> ops) {
@@ -308,9 +347,9 @@ void remove(slice<int64_t*, int64_t*> keys) {
                      make_slice(key_split));
     });
 
-    cout<<n<<endl;
+    cout << n << endl;
     for (int i = 0; i < n; i += 1000) {
-        cout<<i<<' '<<keys_sorted[i]<<' '<<target[i]<<endl;
+        cout << i << ' ' << keys_sorted[i] << ' ' << target[i] << endl;
     }
     assert(false);
 
@@ -327,7 +366,7 @@ void remove(slice<int64_t*, int64_t*> keys) {
     });
     // time_nested("exec", [&]() { ASSERT(!io->exec()); });
     io->reset();
-    cout<<"remove finished!"<<endl;
+    cout << "remove finished!" << endl;
     return;
 }
 
