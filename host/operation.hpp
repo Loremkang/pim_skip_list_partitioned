@@ -230,6 +230,16 @@ auto predecessor(slice<int64_t*, int64_t*> keys) {
         n, [&](size_t i) { return find_target(keys[i], splits); });
     time_end("find_target");
 
+    // auto tmpcount = parlay::sequence(nr_of_dpus, 0);
+    // for (int i = 0; i < keys.size(); i ++) {
+    //     tmpcount[target[i]] ++;
+    // }
+    // int maxcount = 0;
+    // for (int i = 0; i < nr_of_dpus; i ++) {
+    //     maxcount = max(maxcount, tmpcount[i]);
+    // }
+    // printf("count: %d/%d, %lf\n", maxcount, n, (double)maxcount * nr_of_dpus / n);
+
     IO_Manager* io;
     IO_Task_Batch* batch;
 
@@ -260,11 +270,28 @@ auto predecessor(slice<int64_t*, int64_t*> keys) {
 void insert(slice<key_value*, key_value*> kvs) {
     int n = kvs.size();
 
-    parlay::sequence<key_value> kv_sorted;
     time_nested("sort", [&]() {
-        kv_sorted =
-            parlay::sort(kvs, [](auto t1, auto t2) { return t1.key < t2.key; });
+        parlay::sort_inplace(kvs);
     });
+
+    auto kv_sorted =
+        parlay::pack(kvs, parlay::delayed_seq<bool>(n, [&](size_t i) {
+                         return (i == 0) || (kvs[i].key != kvs[i - 1].key);
+                     }));
+    
+    n = kv_sorted.size();
+
+    // for (int i = 0; i < n; i += 1000) {
+    //     cout<<i<<'\t'<<kvs[i].key<<'\t'<<kvs[i].value<<endl;
+    // }
+    // exit(0);
+
+
+    // parlay::sequence<key_value> kv_sorted;
+    // time_nested("sort", [&]() {
+    //     kv_sorted =
+    //         parlay::sort(kvs, [](auto t1, auto t2) { return t1.key < t2.key; });
+    // });
 
     auto keys_sorted = parlay::delayed_seq<int64_t>(
         n, [&](size_t i) { return kv_sorted[i].key; });
@@ -277,6 +304,16 @@ void insert(slice<key_value*, key_value*> kvs) {
         find_targets(make_slice(keys_sorted), make_slice(target),
                      make_slice(key_split));
     });
+
+    // auto tmpcount = parlay::sequence(nr_of_dpus, 0);
+    // for (int i = 0; i < keys_sorted.size(); i ++) {
+    //     tmpcount[target[i]] ++;
+    // }
+    // int maxcount = 0;
+    // for (int i = 0; i < nr_of_dpus; i ++) {
+    //     maxcount = max(maxcount, tmpcount[i]);
+    // }
+    // printf("count: %d/%d, %lf\n", maxcount, n, (double)maxcount * nr_of_dpus / n);
 
     auto heights = parlay::sequence<int>(n);
     time_nested("init height", [&]() {
@@ -335,8 +372,16 @@ void insert(slice<key_value*, key_value*> kvs) {
 void remove(slice<int64_t*, int64_t*> keys) {
     int n = keys.size();
 
-    parlay::sequence<int64_t> keys_sorted;
-    time_nested("sort", [&]() { keys_sorted = parlay::sort(keys); });
+    time_nested("sort", [&]() { parlay::sort_inplace(keys); });
+
+    // parlay::sequence<int64_t> keys_sorted;
+    // time_nested("sort", [&]() { keys_sorted = parlay::sort(keys); });
+    auto keys_sorted =
+        parlay::pack(keys, parlay::delayed_seq<bool>(n, [&](size_t i) {
+                         return (i == 0) || (keys[i] != keys[i - 1]);
+                     }));
+
+    n = keys_sorted.size();
 
     IO_Manager* io;
     IO_Task_Batch* batch;
@@ -347,11 +392,11 @@ void remove(slice<int64_t*, int64_t*> keys) {
                      make_slice(key_split));
     });
 
-    cout << n << endl;
-    for (int i = 0; i < n; i += 1000) {
-        cout << i << ' ' << keys_sorted[i] << ' ' << target[i] << endl;
-    }
-    assert(false);
+    // cout << n << endl;
+    // for (int i = 0; i < n; i += 1000) {
+    //     cout << i << ' ' << keys_sorted[i] << ' ' << target[i] << endl;
+    // }
+    // assert(false);
 
     auto location = parlay::sequence<int>(n);
     time_nested("taskgen", [&]() {
@@ -364,7 +409,30 @@ void remove(slice<int64_t*, int64_t*> keys) {
             [&](size_t i) { return target[i]; }, make_slice(location));
         io->finish_task_batch();
     });
-    // time_nested("exec", [&]() { ASSERT(!io->exec()); });
+
+    time_nested("taskgen2", [&]() {
+        batch = io->alloc<L3_get_min_task, L3_get_min_reply>(direct);
+        batch->push_task_sorted(
+            nr_of_dpus, nr_of_dpus,
+            [&](size_t i) {
+                (void)i;
+                return (L3_get_min_task){.key = 0};
+            },
+            [&](size_t i) { return i; },
+            make_slice(location).cut(0, nr_of_dpus));
+        io->finish_task_batch();
+    });
+
+    time_nested("exec", [&]() { ASSERT(io->exec()); });
+
+    time_nested("result", [&]() {
+        for (int i = 0; i < nr_of_dpus; i++) {
+            auto rep = (L3_get_min_reply*)batch->ith(i, 0);
+            assert(rep->key >= min_key[i]);
+            min_key[i] = rep->key;
+        }
+    });
+
     io->reset();
     cout << "remove finished!" << endl;
     return;

@@ -7,7 +7,7 @@
 // #define KHB_DEBUG_L3
 // #define KHB_DEBUG_TASK
 // #define KHB_INFO
-#define BLC_DETAIL
 #define INFO_IO_BALANCE
+// #define PRINT_IO
 
 #define IRAM_FRIENDLY

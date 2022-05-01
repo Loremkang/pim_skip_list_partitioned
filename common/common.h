@@ -3,8 +3,8 @@
 // #include "task.h"
 // #define KHB_DEBUG
 
-#define MAX_TASK_BUFFER_SIZE_PER_DPU (3000 << 10) // 2 MB
-#define MAX_TASK_COUNT_PER_DPU_PER_BLOCK ((2000 << 10) >> 3) // 1 MB = 125 K
+#define MAX_TASK_BUFFER_SIZE_PER_DPU (4000 << 10) // 4 MB
+#define MAX_TASK_COUNT_PER_DPU_PER_BLOCK ((2000 << 10) >> 3) // 2 MB = 250 K
 
 #define MAX_L3_HEIGHT (20)
 
@@ -14,7 +14,7 @@
 // #define BATCH_SIZE (NR_DPUS * MAX_TASK_COUNT_PER_DPU)
 
 // L0,1,2,3 50MB
-#define LX_BUFFER_SIZE (37 << 20)
+#define LX_BUFFER_SIZE (36 << 20)
 
 // HASH TABLE 8MB. should be power of 2
 #define LX_HASHTABLE_SIZE ((4 << 20) >> 3)
