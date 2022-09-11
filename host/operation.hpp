@@ -57,12 +57,18 @@ void dpu_energy_stats(bool flag = false) {
 #endif
 }
 
+const int64_t KEY_RANGE_MIN = INT64_MIN;
+const uint64_t KEY_RANGE_SIZE = UINT64_MAX;
+
+// const int64_t KEY_RANGE_MIN = 0;
+// const uint64_t KEY_RANGE_SIZE = ((((((((((25ull << 5) + 25) << 5) + 25) << 5) + 25) << 5) + 25) + 1) << (15 + 23)) - 1;
+
 void init_splits() {
     printf("\n********** INIT SPLITS **********\n");
     key_split = parlay::sequence<int64_t>(nr_of_dpus);
     min_key = parlay::sequence<int64_t>(nr_of_dpus);
-    uint64_t split = UINT64_MAX / nr_of_dpus;
-    key_split[0] = INT64_MIN;
+    uint64_t split = KEY_RANGE_SIZE / nr_of_dpus;
+    key_split[0] = KEY_RANGE_MIN;
     for (int i = 1; i < nr_of_dpus; i++) {
         key_split[i] = key_split[i - 1] + split;
         // cout<<key_split[i]<<endl;
@@ -159,12 +165,17 @@ void find_targets(slice<IntIterator1, IntIterator1> in,
                 while (starts[i] < n && in[starts[i]] < split[i]) {
                     starts[i]++;
                 }
-                if (starts[i] < n) {
-                    target[starts[i]] = i;
-                }
+                // if (starts[i] < n) {
+                //     target[starts[i]] = i;
+                // }
             },
             1024 / log2_up(n));
     });
+    for (int i = 0; i < nr_of_dpus; i ++) {
+        if (starts[i] < n) {
+            target[starts[i]] = i;
+        }
+    }
     parlay::scan_inclusive_inplace(target, parlay::maxm<int>());
 }
 
@@ -280,12 +291,13 @@ void insert(slice<key_value*, key_value*> kvs) {
                      }));
     
     n = kv_sorted.size();
+    printf("n=%d\n", n);
+    printf("kvs.size=%d\n", kvs.size());
 
     // for (int i = 0; i < n; i += 1000) {
     //     cout<<i<<'\t'<<kvs[i].key<<'\t'<<kvs[i].value<<endl;
     // }
     // exit(0);
-
 
     // parlay::sequence<key_value> kv_sorted;
     // time_nested("sort", [&]() {
@@ -304,6 +316,23 @@ void insert(slice<key_value*, key_value*> kvs) {
         find_targets(make_slice(keys_sorted), make_slice(target),
                      make_slice(key_split));
     });
+    // for (int i = 0; i < n; i ++) {
+    //     int t = target[i];
+    //     if (!((key_split[t] <= keys_sorted[i]) && (keys_sorted[i] < min_key[t]))) {
+    //         printf("%d\t%lld\t%lld\t%lld\n", t, key_split[t], keys_sorted[i], min_key[t]);
+    //         assert(false);
+    //     }
+    // }
+    // for (int i = 0; i < n; i ++) {
+    //     int t = target[i];
+    //     assert(key_split[t] <= keys_sorted[i]);
+    //     assert(keys_sorted[i] < min_key[t]);
+    // }
+
+    // for (int i = 0; i < n; i += 1000) {
+    //     printf("%d %d\n", i, target[i]);
+    // }
+    // exit(0);
 
     // auto tmpcount = parlay::sequence(nr_of_dpus, 0);
     // for (int i = 0; i < keys_sorted.size(); i ++) {
@@ -360,12 +389,20 @@ void insert(slice<key_value*, key_value*> kvs) {
     time_nested("result", [&]() {
         for (int i = 0; i < nr_of_dpus; i++) {
             auto rep = (L3_get_min_reply*)batch->ith(i, 0);
-            assert(rep->key <= min_key[i]);
-            min_key[i] = rep->key;
+            if (!((rep->key <= min_key[i]) || (rep->key == INT64_MAX))) {
+                printf("%d\t%lld\t%lld\t%lld\n", i, rep->key, min_key[i], key_split[i]);
+                assert(false);
+            }
+            min_key[i] = min(min_key[i], rep->key);
         }
     });
 
+    // for (int i = 0; i < nr_of_dpus; i ++) {
+    //     printf("%d\t%lld\t%lld\n", i, key_split[i], min_key[i]);
+    // }
+
     io->reset();
+    // exit(0);
     return;
 }
 

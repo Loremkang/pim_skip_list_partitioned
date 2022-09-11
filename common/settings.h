@@ -10,4 +10,8 @@
 #define INFO_IO_BALANCE
 // #define PRINT_IO
 
+#define USE_PAPI
+
+#define SCHEDULER_DEACTIVATE
+
 #define IRAM_FRIENDLY

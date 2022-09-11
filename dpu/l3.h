@@ -51,6 +51,16 @@ static inline bool L3_get(int64_t key, int64_t* value) {
     return true;
 }
 
+static inline bool L3_get_ml3ptr(int64_t key, mL3ptr* nn) {
+    uint32_t htv = ht_search(l3ht, key, L3_ht_get);
+    // IN_DPU_ASSERT(htv != INVALID_DPU_ADDR, "L3remove: key not found\n");
+    if (htv == INVALID_DPU_ADDR) {
+        return false;
+    }
+    *nn = (mL3ptr)htv;
+    return true;
+}
+
 static inline int64_t L3_search(int64_t key, int record_height,
                                 mL3ptr *rightmost, int64_t *value) {
     mL3ptr tmp = root;

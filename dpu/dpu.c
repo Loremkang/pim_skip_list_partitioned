@@ -111,12 +111,37 @@ void exec_L3_insert_task(int lft, int rt) {
 
     int n = rt - lft;
     int tid = me();
+    // EXIT();
 
     __mram_ptr L3_insert_task* mram_tit =
         (__mram_ptr L3_insert_task*)recv_block_tasks;
     mram_tit += lft;
 
     newnode_size[tid] = 0;
+    int dedup_start = 0;
+    for (int i = 0; i < n; i ++) {
+        L3_insert_task tt;
+        mram_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
+        int64_t k = tt.key;
+        mL3ptr nn;
+        bool succeed = L3_get_ml3ptr(k, &nn);
+        // bool succeed = 0;
+        // if (i < 10) {
+        //     printf("%d\t%llx\t%d\t%x\n", i, k, succeed, nn);
+        // }
+        if (!succeed) {
+            mram_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
+            dedup_start ++;
+        } else {
+            // mram_write(&tt.value, &(nn->value), sizeof(int64_t));
+            nn->value = tt.value;
+        }
+    }
+    // printf("%d\n", dedup_start);
+    n = dedup_start;
+    // EXIT();
+    // return;
+
     for (int i = 0; i < n; i++) {
         int height = mram_tit[i].height;
         newnode_size[tid] += L3_node_size(height);
@@ -148,8 +173,13 @@ void exec_L3_get_min_task(int lft, int rt) {
     (void)lft; (void)rt;
     init_block_with_type(L3_get_min_task, L3_get_min_reply);
     pptr r_first = root->right[0];
-    mL3ptr nn = (mL3ptr)r_first.addr;
-    L3_get_min_reply tgmr = (L3_get_min_reply){.key = nn->key};
+    L3_get_min_reply tgmr;
+    if (equal_pptr(r_first, null_pptr)) {
+        tgmr = (L3_get_min_reply){.key = INT64_MAX};
+    } else {
+        mL3ptr nn = (mL3ptr)r_first.addr;
+        tgmr = (L3_get_min_reply){.key = nn->key};
+    }
     push_fixed_reply(0, &tgmr);
 }
 
