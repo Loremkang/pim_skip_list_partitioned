@@ -135,7 +135,7 @@ auto find_range_target(scan_operation scan_op,
     int64_t lkey = scan_op.lkey, rkey = scan_op.rkey;
     int l = ((ll < 0) ? 0 : ll), r = ((rr <= ll) ? target.size() : rr);
     int mid;
-    while (r - l > 1) {
+    while (r - l > 10) {
         mid = (l + r) >> 1;
         if (target[mid] <= lkey) {
             l = mid;
@@ -145,8 +145,8 @@ auto find_range_target(scan_operation scan_op,
             break;
         }
     }
-    int res_l = find_target(lkey, target, l, mid);
-    int res_r = find_target(rkey, target, mid, r);
+    int res_l = find_target(lkey, target, l, r);
+    int res_r = find_target(rkey, target, l, r);
     if (res_r >= target.size()) res_r = target.size() - 1;
     return std::make_pair(res_l, res_r);
 }
@@ -498,6 +498,56 @@ auto scan(slice<scan_operation*, scan_operation*> op_set) {
             ((i != nn - 1) ? range_prefix_sum[scan_start[i + 1]].rkey
                            : range_prefix_scan.second.rkey));
     });
+    
+    auto block_nums = parlay::sequence<int64_t>(nn);
+    uint64_t avg_len = ops[0].rkey - ops[0].lkey;
+    parfor_wrap(0, nn, [&](size_t i){
+        uint64_t merge_len;
+        if(ops_merged[i].rkey >= 0 && ops_merged[i].lkey >= 0)
+            merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
+        else if(ops_merged[i].rkey < 0 && ops_merged[i].lkey < 0)
+            merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
+         else
+            merge_len = (uint64_t)(ops_merged[i].rkey) + (uint64_t)(-(ops_merged[i].lkey));
+        if(merge_len >= (uint64_t)5 * avg_len)
+            block_nums[i] = merge_len / avg_len + 1;
+        else
+            block_nums[i] = 1;
+    });
+    auto block_idx_scan = parlay::scan(block_nums);
+    auto range_tmp = parlay::sequence<scan_operation>(block_idx_scan.second);
+    if(nn < (n >> 4)) {
+        for(int i = 0; i < nn; i++) {
+            if(block_nums[i] > 1) {
+                int64_t start_idx = block_idx_scan.first[i];
+                int64_t block_size = ops[0].rkey - ops[0].lkey;
+                parfor_wrap(0, block_nums[i], [&](int64_t j){
+                    range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
+                    range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
+                    if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
+                        range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
+                });
+            }
+            else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
+        }
+    }
+    else {
+        parfor_wrap(0, nn, [&](int i){
+            if(block_nums[i] > 1) {
+                int64_t start_idx = block_idx_scan.first[i];
+                int64_t block_size = ops[0].rkey - ops[0].lkey;
+                for(int64_t j = 0; j < block_nums[i]; j++) {
+                    range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
+                    range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
+                    if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
+                        range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
+                }
+            }
+            else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
+        });
+    }
+    ops_merged = range_tmp;
+    nn = block_idx_scan.second;
     time_end("merge_range");
 
     time_start("find_target");
