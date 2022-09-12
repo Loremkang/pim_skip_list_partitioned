@@ -21,7 +21,7 @@ bool init_state = false;
 // static int64_t min_key[NR_DPUS + 10];
 parlay::sequence<int64_t> key_split;
 parlay::sequence<int64_t> min_key;
-int max_height = 19;
+int max_height = MAX_L3_HEIGHT - 1;
 
 #ifdef DPU_ENERGY
 uint64_t op_total;

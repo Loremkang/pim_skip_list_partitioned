@@ -6,6 +6,7 @@
 #include "hashtable_l3size.h"
 #include <barrier.h>
 #include <alloc.h>
+#include "gc.h"
 
 // Range Scan
 #include "data_block.h"
@@ -27,6 +28,7 @@ static inline void L3_init(int64_t key, int64_t value, int height) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(height));
     root = get_new_L3(key, value, height, maddr);
+    gc_init();
 }
 
 static inline int L3_ht_get(ht_slot v, int64_t key) {
@@ -123,31 +125,40 @@ static inline void L3_insert_parallel(int length, int l,
 
     barrier_wait(&L3_barrier);
 
-    if (tasklet_id == 0) {
-        for (int i = 0; i < NR_TASKLETS; i++) {
-            newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
+    mutex_lock(L3_lock);
+    for (int i = 0; i < length; i ++) {
+        int64_t height = mram_tit[i].height;
+        pptr recycle = alloc_node((int)height, 1);
+        if (recycle.id == 0) { // fail to get from gc
+            newnode[i] = (int64_t)reserve_space_L3(L3_node_size((int)height));
+        } else {
+            // assert(false);
+            IN_DPU_ASSERT(recycle.id == 1, "invalid recycle.id");
+            newnode[i] = (int64_t)recycle.addr;
         }
-        // if (l3cnt >= LX_BUFFER_SIZE) {
-        // for (int i = 0; i < NR_TASKLETS; i++) {
-        //     printf("%d\n", newnode_size[i]);
-        // }
-        // }
-        // EXIT();
-        IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
     }
+    mutex_unlock(L3_lock);
 
-    barrier_wait(&L3_barrier);
+    // if (tasklet_id == 0) {
+    //     for (int i = 0; i < NR_TASKLETS; i++) {
+    //         newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
+    //     }
+    //     IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
+    // }
+
+    // barrier_wait(&L3_barrier);
 
     // EXIT();
-    __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
+    // __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
 
     for (int i = 0; i < length; i++) {
         int64_t key = mram_tit[i].key;
         int64_t height = mram_tit[i].height;
         int64_t value = mram_tit[i].value;
         // pptr addr = mram_tit[i].addr;
-        newnode[i] = (int64_t)get_new_L3(key, value, height, maddr);
-        maddr += L3_node_size(height);
+        // newnode[i] = (int64_t)get_new_L3(key, value, height, maddr);
+        newnode[i] = (int64_t)get_new_L3(key, value, height, (__mram_ptr void *)newnode[i]);
+        // maddr += L3_node_size(height);
         if (height > max_height) {
             max_height = height;
         }
@@ -433,6 +444,13 @@ static inline void L3_remove_parallel(int length, int l,
                       (uint32_t)nodes[i]);
         }
     }
+    mutex_lock(L3_lock);
+    for (int i = 0; i < length; i ++) {
+        if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
+            free_node(nodes[i], heights[i]);
+        }
+    }
+    mutex_unlock(L3_lock);
 }
 
 static inline void L3_sancheck() {
