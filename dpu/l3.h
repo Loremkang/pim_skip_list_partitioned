@@ -145,7 +145,7 @@ static inline void L3_insert_parallel(int length, int l,
     //     IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
     // }
 
-    // barrier_wait(&L3_barrier);
+    barrier_wait(&L3_barrier);
 
     // EXIT();
     // __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
