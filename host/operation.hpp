@@ -225,6 +225,7 @@ auto get(slice<int64_t*, int64_t*> keys) {
     // return false;
 }
 void update(slice<key_value*, key_value*> ops) {
+    (void)ops;
     assert(false);
     // return false;
 }
@@ -292,7 +293,7 @@ void insert(slice<key_value*, key_value*> kvs) {
     
     n = kv_sorted.size();
     printf("n=%d\n", n);
-    printf("kvs.size=%d\n", kvs.size());
+    printf("kvs.size=%d\n", (int)kvs.size());
 
     // for (int i = 0; i < n; i += 1000) {
     //     cout<<i<<'\t'<<kvs[i].key<<'\t'<<kvs[i].value<<endl;

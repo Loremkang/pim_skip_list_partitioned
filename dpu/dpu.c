@@ -110,7 +110,7 @@ void exec_L3_insert_task(int lft, int rt) {
     init_block_with_type(L3_insert_task, empty_task_reply);
 
     int n = rt - lft;
-    int tid = me();
+    // int tid = me();
     // EXIT();
 
     __mram_ptr L3_insert_task* mram_tit =
@@ -151,8 +151,10 @@ void exec_L3_insert_task(int lft, int rt) {
 
     mL3ptr* right_predecessor_shared = bufferA_shared;
     mL3ptr* right_newnode_shared = bufferB_shared;
-    L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
+    L3_insert_parallel(n, lft, mram_tit, max_height_shared,
                         right_predecessor_shared, right_newnode_shared);
+    // L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
+    //                     right_predecessor_shared, right_newnode_shared);
 }
 
 void exec_L3_remove_task(int lft, int rt) {

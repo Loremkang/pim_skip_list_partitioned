@@ -111,7 +111,6 @@ mpint64_t height_buffer;
 
 static inline void L3_insert_parallel(int length, int l,
                                       __mram_ptr L3_insert_task *mram_tit,
-                                      uint32_t *newnode_size,
                                       int8_t *max_height_shared,
                                       mL3ptr *right_predecessor_shared,
                                       mL3ptr *right_newnode_shared) {
@@ -447,7 +446,7 @@ static inline void L3_remove_parallel(int length, int l,
     mutex_lock(L3_lock);
     for (int i = 0; i < length; i ++) {
         if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
-            free_node(nodes[i], heights[i]);
+            free_node((mL3ptr)nodes[i], heights[i]);
         }
     }
     mutex_unlock(L3_lock);
