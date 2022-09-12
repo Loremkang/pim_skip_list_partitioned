@@ -477,78 +477,9 @@ void remove(slice<int64_t*, int64_t*> keys) {
 
 // Range Scan
 auto scan(slice<scan_operation*, scan_operation*> op_set) {
+    int nn = op_set.size();
     int n = op_set.size();
-    time_start("merge_range");
-    auto ops =
-        parlay::sort(op_set, [&](scan_operation s1, scan_operation s2) -> bool {
-            return (s1.lkey < s2.lkey) ||
-                   ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
-        });
-    auto range_prefix_scan =
-        parlay::scan(ops, scan_op_rkey_nlt<scan_operation>());
-    auto range_prefix_sum = parlay::make_slice(range_prefix_scan.first);
-    auto scan_start_arr = parlay::tabulate(n, [&](size_t i) -> bool {
-        return (i == 0) || (range_prefix_sum[i].rkey < ops[i].lkey);
-    });
-    auto scan_start = parlay::pack_index(scan_start_arr);
-    int nn = scan_start.size();
-    auto ops_merged = parlay::tabulate(nn, [&](int i) {
-        return make_scan_op<scan_operation>(
-            ops[scan_start[i]].lkey,
-            ((i != nn - 1) ? range_prefix_sum[scan_start[i + 1]].rkey
-                           : range_prefix_scan.second.rkey));
-    });
-    
-    auto block_nums = parlay::sequence<int64_t>(nn);
-    uint64_t avg_len = ops[0].rkey - ops[0].lkey;
-    parfor_wrap(0, nn, [&](size_t i){
-        uint64_t merge_len;
-        if(ops_merged[i].rkey >= 0 && ops_merged[i].lkey >= 0)
-            merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
-        else if(ops_merged[i].rkey < 0 && ops_merged[i].lkey < 0)
-            merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
-         else
-            merge_len = (uint64_t)(ops_merged[i].rkey) + (uint64_t)(-(ops_merged[i].lkey));
-        if(merge_len >= (uint64_t)5 * avg_len)
-            block_nums[i] = merge_len / avg_len + 1;
-        else
-            block_nums[i] = 1;
-    });
-    auto block_idx_scan = parlay::scan(block_nums);
-    auto range_tmp = parlay::sequence<scan_operation>(block_idx_scan.second);
-    if(nn < (n >> 4)) {
-        for(int i = 0; i < nn; i++) {
-            if(block_nums[i] > 1) {
-                int64_t start_idx = block_idx_scan.first[i];
-                int64_t block_size = ops[0].rkey - ops[0].lkey;
-                parfor_wrap(0, block_nums[i], [&](int64_t j){
-                    range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
-                    range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
-                    if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
-                        range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
-                });
-            }
-            else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
-        }
-    }
-    else {
-        parfor_wrap(0, nn, [&](int i){
-            if(block_nums[i] > 1) {
-                int64_t start_idx = block_idx_scan.first[i];
-                int64_t block_size = ops[0].rkey - ops[0].lkey;
-                for(int64_t j = 0; j < block_nums[i]; j++) {
-                    range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
-                    range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
-                    if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
-                        range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
-                }
-            }
-            else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
-        });
-    }
-    ops_merged = range_tmp;
-    nn = block_idx_scan.second;
-    time_end("merge_range");
+    auto ops_merged = op_set;
 
     time_start("find_target");
     auto splits = parlay::make_slice(min_key);
@@ -606,67 +537,21 @@ auto scan(slice<scan_operation*, scan_operation*> op_set) {
                 reply->vals[j + reply->length];
         }
     });
-    time_end("get_result");
     io->reset();
-
-    time_start("reassemble_result");
-    parlay::sort_inplace(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-        return (kv1.key < kv2.key) ||
-               ((kv1.key == kv2.key) && (kv1.value < kv2.value));
-    });
-    auto kv_set =
-        parlay::unique(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-            return (kv1.key == kv2.key);
-        });
-    auto kv_n = kv_set.size();
     auto index_set = parlay::tabulate(n, [&](size_t i) {
-        int ll = 0, rr = kv_n;
-        int64_t lkey = op_set[i].lkey, rkey = op_set[i].rkey;
-        int mid, res_ll, res_rr;
-        while (rr - ll > 1) {
-            mid = (ll + rr) >> 1;
-            if (lkey >= kv_set[mid].key)
-                ll = mid;
-            else if (rkey < kv_set[mid].key)
-                rr = mid;
-            else {
-                break;
-            }
-        }
-        int lll = ll, rrr = rr, mmm = mid;
-
-        ll = lll;
-        rr = mmm;
-        while (rr - ll > 1) {
-            mid = (ll + rr) >> 1;
-            if (lkey < kv_set[mid].key)
-                rr = mid;
-            else
-                ll = mid;
-        }
-        if (lkey <= kv_set[ll].key)
-            res_ll = ll;
+        if(i != n - 1)
+            return make_pair(
+                kv_nums_prefix_sum[node_num_prefix_sum[i]],
+                kv_nums_prefix_sum[node_num_prefix_sum[i] + node_nums[i] - 1] + kv_nums[node_num_prefix_sum[i] + node_nums[i] - 1]
+            );
         else
-            res_ll = ll + 1;
-
-        ll = mmm;
-        rr = rrr;
-        while (rr - ll > 1) {
-            mid = (ll + rr) >> 1;
-            if (rkey <= kv_set[mid].key)
-                rr = mid;
-            else
-                ll = mid;
-        }
-        if (ll >= kv_n - 1)
-            res_rr = kv_n;
-        else if (kv_set[ll + 1].key <= rkey)
-            res_rr = ll + 2;
-        else
-            res_rr = ll + 1;
-        return std::make_pair(res_ll, res_rr);
+            return make_pair(
+                kv_nums_prefix_sum[node_num_prefix_sum[n - 1]],
+                kv_num
+            );
     });
-    time_end("reassemble_result");
-    return make_pair(kv_set, index_set);
+    time_end("get_result");
+
+    return make_pair(kv_set1, index_set);
 }
 };  // namespace pim_skip_list
