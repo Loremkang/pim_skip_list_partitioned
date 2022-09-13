@@ -34,7 +34,11 @@ bool print_debug = false;
 #include "driver.hpp"
 
 #ifndef DPU_BINARY
+#ifdef DPU_ENERGY
+#define DPU_BINARY "build/range_partitioning_skip_list_dpu_energy"
+#else
 #define DPU_BINARY "build/range_partitioning_skip_list_dpu"
+#endif
 #endif
 
 // #define ANSI_COLOR_RED "\x1b[31m"

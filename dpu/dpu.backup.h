@@ -104,7 +104,8 @@ void execute(int l, int r) {
         case INIT_TSK: {
             if (tasklet_id == 0) {
                 init_task it;
-                mram_read(receive_task_start, &it, sizeof(init_task));
+                // mram_read(receive_task_start, &it, sizeof(init_task));
+                m_read(receive_task_start, &it, sizeof(init_task));
                 init(&it);
             }
             break;
@@ -113,7 +114,8 @@ void execute(int l, int r) {
         case L3_INIT_TSK: {
             if (tasklet_id == 0) {
                 L3_init_task tit;
-                mram_read(receive_task_start, &tit, sizeof(L3_init_task));
+                // mram_read(receive_task_start, &tit, sizeof(L3_init_task));
+                m_read(receive_task_start, &tit, sizeof(L3_init_task));
                 L3_init(&tit);
             }
             break;
@@ -224,10 +226,15 @@ int main() {
             max_height_shared[i] = 0;
         }
 
-        mram_read(receive_buffer, &dpu_epoch_number, sizeof(int64_t));
-        mram_read(receive_buffer + sizeof(int64_t), &dpu_task_type,
+        // mram_read(receive_buffer, &dpu_epoch_number, sizeof(int64_t));
+        m_read(receive_buffer, &dpu_epoch_number, sizeof(int64_t));
+        // mram_read(receive_buffer + sizeof(int64_t), &dpu_task_type,
+        //           sizeof(int64_t));
+        m_read(receive_buffer + sizeof(int64_t), &dpu_task_type,
                   sizeof(int64_t));
-        mram_read(receive_buffer + sizeof(int64_t) * 2, &dpu_task_count,
+        // mram_read(receive_buffer + sizeof(int64_t) * 2, &dpu_task_count,
+        //           sizeof(int64_t));
+        m_read(receive_buffer + sizeof(int64_t) * 2, &dpu_task_count,
                   sizeof(int64_t));
     }
 

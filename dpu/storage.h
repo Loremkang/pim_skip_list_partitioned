@@ -64,7 +64,8 @@ void wram_heap_load() {
         wram_heap_init();
     } else {
         WRAMHeap heapInfo;
-        mram_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
+        // mram_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
+        m_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
         DPU_ID = heapInfo.DPU_ID;
         for (int i = 0; i < NR_TASKLETS; i++) {
             send_varlen_offset[i] = heapInfo.send_varlen_offset[i];

@@ -110,18 +110,19 @@ void exec_L3_insert_task(int lft, int rt) {
     init_block_with_type(L3_insert_task, empty_task_reply);
 
     int n = rt - lft;
-    // int tid = me();
+    int tid = me();
     // EXIT();
 
     __mram_ptr L3_insert_task* mram_tit =
         (__mram_ptr L3_insert_task*)recv_block_tasks;
     mram_tit += lft;
 
-    // newnode_size[tid] = 0;
+    newnode_size[tid] = 0;
     int dedup_start = 0;
     for (int i = 0; i < n; i ++) {
         L3_insert_task tt;
-        mram_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
+        // mram_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
+        m_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
         int64_t k = tt.key;
         mL3ptr nn;
         bool succeed = L3_get_ml3ptr(k, &nn);
@@ -130,7 +131,8 @@ void exec_L3_insert_task(int lft, int rt) {
         //     printf("%d\t%llx\t%d\t%x\n", i, k, succeed, nn);
         // }
         if (!succeed) {
-            mram_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
+            // mram_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
+            m_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
             dedup_start ++;
         } else {
             // mram_write(&tt.value, &(nn->value), sizeof(int64_t));
@@ -142,19 +144,17 @@ void exec_L3_insert_task(int lft, int rt) {
     // EXIT();
     // return;
 
-    // for (int i = 0; i < n; i++) {
-    //     int height = mram_tit[i].height;
-    //     newnode_size[tid] += L3_node_size(height);
-    //     IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
-    //                     "execute: invalid height\n");
-    // }
+    for (int i = 0; i < n; i++) {
+        int height = mram_tit[i].height;
+        newnode_size[tid] += L3_node_size(height);
+        IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
+                        "execute: invalid height\n");
+    }
 
     mL3ptr* right_predecessor_shared = bufferA_shared;
     mL3ptr* right_newnode_shared = bufferB_shared;
-    L3_insert_parallel(n, lft, mram_tit, max_height_shared,
+    L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
                         right_predecessor_shared, right_newnode_shared);
-    // L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
-    //                     right_predecessor_shared, right_newnode_shared);
 }
 
 void exec_L3_remove_task(int lft, int rt) {

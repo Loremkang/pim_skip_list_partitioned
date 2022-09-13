@@ -143,7 +143,8 @@ static inline mL3ptr get_new_L3(int64_t key, int64_t value, int height, __mram_p
     // __mram_ptr void* maddr = reserve_space_L3(size);
     uint8_t buffer[sizeof(L3node) + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, value, height, buffer, maddr);
-    mram_write((void*)nn, maddr, size);
+    // mram_write((void*)nn, maddr, size);
+    m_write((void*)nn, maddr, size);
     ht_insert(l3ht, &l3htcnt, hash_to_addr(key, LX_HASHTABLE_SIZE),
               (uint32_t)maddr);
     return (mL3ptr)maddr;
