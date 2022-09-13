@@ -44,7 +44,8 @@ void wram_heap_save() {
     }
 
     if (saveAddr == NULL_pt(mpuint8_t)) saveAddr = wram_heap_save_addr_tmp;
-    mram_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
+    // mram_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
+    m_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
     wram_heap_save_addr = saveAddr;
 }
 

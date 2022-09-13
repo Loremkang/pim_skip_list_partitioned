@@ -6,6 +6,7 @@
 #include "hashtable_l3size.h"
 #include <barrier.h>
 #include <alloc.h>
+#include "gc.h"
 
 // Range Scan
 #include "data_block.h"
@@ -27,6 +28,7 @@ static inline void L3_init(int64_t key, int64_t value, int height) {
     IN_DPU_ASSERT(l3cnt == 8, "L3init: Wrong l3cnt\n");
     __mram_ptr void* maddr = reserve_space_L3(L3_node_size(height));
     root = get_new_L3(key, value, height, maddr);
+    gc_init();
 }
 
 static inline int L3_ht_get(ht_slot v, int64_t key) {
@@ -66,11 +68,11 @@ static inline int64_t L3_search(int64_t key, int record_height,
     mL3ptr tmp = root;
     int64_t ht = root->height - 1;
     while (ht >= 0) {
-        pptr r = tmp->right[ht];
         #ifdef DPU_ENERGY
         op_count += 1;
         db_size_count += 8;
         #endif
+        pptr r = tmp->right[ht];
         if (r.id != INVALID_DPU_ID && ((mL3ptr)r.addr)->key <= key) {
             tmp = (mL3ptr)r.addr;  // go right
             continue;
@@ -113,7 +115,6 @@ mpint64_t height_buffer;
 
 static inline void L3_insert_parallel(int length, int l,
                                       __mram_ptr L3_insert_task *mram_tit,
-                                      uint32_t *newnode_size,
                                       int8_t *max_height_shared,
                                       mL3ptr *right_predecessor_shared,
                                       mL3ptr *right_newnode_shared) {
@@ -127,31 +128,40 @@ static inline void L3_insert_parallel(int length, int l,
 
     barrier_wait(&L3_barrier);
 
-    if (tasklet_id == 0) {
-        for (int i = 0; i < NR_TASKLETS; i++) {
-            newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
+    mutex_lock(L3_lock);
+    for (int i = 0; i < length; i ++) {
+        int64_t height = mram_tit[i].height;
+        pptr recycle = alloc_node((int)height, 1);
+        if (recycle.id == 0) { // fail to get from gc
+            newnode[i] = (int64_t)reserve_space_L3(L3_node_size((int)height));
+        } else {
+            // assert(false);
+            IN_DPU_ASSERT(recycle.id == 1, "invalid recycle.id");
+            newnode[i] = (int64_t)recycle.addr;
         }
-        // if (l3cnt >= LX_BUFFER_SIZE) {
-        // for (int i = 0; i < NR_TASKLETS; i++) {
-        //     printf("%d\n", newnode_size[i]);
-        // }
-        // }
-        // EXIT();
-        IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
     }
+    mutex_unlock(L3_lock);
+
+    // if (tasklet_id == 0) {
+    //     for (int i = 0; i < NR_TASKLETS; i++) {
+    //         newnode_size[i] = (uint32_t)reserve_space_L3(newnode_size[i]);
+    //     }
+    //     IN_DPU_ASSERT(l3cnt < LX_BUFFER_SIZE, "L3 buffer overflow\n");
+    // }
 
     barrier_wait(&L3_barrier);
 
     // EXIT();
-    __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
+    // __mram_ptr void *maddr = (__mram_ptr void *)newnode_size[tasklet_id];
 
     for (int i = 0; i < length; i++) {
         int64_t key = mram_tit[i].key;
         int64_t height = mram_tit[i].height;
         int64_t value = mram_tit[i].value;
         // pptr addr = mram_tit[i].addr;
-        newnode[i] = (int64_t)get_new_L3(key, value, height, maddr);
-        maddr += L3_node_size(height);
+        // newnode[i] = (int64_t)get_new_L3(key, value, height, maddr);
+        newnode[i] = (int64_t)get_new_L3(key, value, height, (__mram_ptr void *)newnode[i]);
+        // maddr += L3_node_size(height);
         if (height > max_height) {
             max_height = height;
         }
@@ -457,6 +467,13 @@ static inline void L3_remove_parallel(int length, int l,
                       (uint32_t)nodes[i]);
         }
     }
+    mutex_lock(L3_lock);
+    for (int i = 0; i < length; i ++) {
+        if ((uint32_t)nodes[i] != INVALID_DPU_ADDR) {
+            free_node((mL3ptr)nodes[i], heights[i]);
+        }
+    }
+    mutex_unlock(L3_lock);
 }
 
 static inline void L3_sancheck() {
@@ -508,11 +525,11 @@ static inline int64_t L3_scan(int64_t lkey, int64_t rkey,
     }
     ht = 1;
     while(ht == 1) {
-        #ifdef DPU_ENERGY
-        op_count += 1;
-        db_size_count += 8;
-        #endif
         pptr r = tmp->right[0];
+        #ifdef DPU_ENERGY
+        op_count += 2;
+        db_size_count += 16;
+        #endif
         if (r.id != INVALID_DPU_ID && ((mL3ptr)r.addr)->key <= rkey) {
             tmp = (mL3ptr)r.addr;  // go right
             num++;

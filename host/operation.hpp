@@ -21,7 +21,7 @@ bool init_state = false;
 // static int64_t min_key[NR_DPUS + 10];
 parlay::sequence<int64_t> key_split;
 parlay::sequence<int64_t> min_key;
-int max_height = 19;
+int max_height = MAX_L3_HEIGHT - 1;
 
 const int64_t KEY_RANGE_MIN = INT64_MIN;
 const uint64_t KEY_RANGE_SIZE = UINT64_MAX;
@@ -191,6 +191,7 @@ auto get(slice<int64_t*, int64_t*> keys) {
     // return false;
 }
 void update(slice<key_value*, key_value*> ops) {
+    (void)ops;
     assert(false);
     // return false;
 }
@@ -258,7 +259,7 @@ void insert(slice<key_value*, key_value*> kvs) {
     
     n = kv_sorted.size();
     printf("n=%d\n", n);
-    printf("kvs.size=%d\n", kvs.size());
+    printf("kvs.size=%d\n", (int)kvs.size());
 
     // for (int i = 0; i < n; i += 1000) {
     //     cout<<i<<'\t'<<kvs[i].key<<'\t'<<kvs[i].value<<endl;
@@ -440,202 +441,6 @@ void remove(slice<int64_t*, int64_t*> keys) {
     cout << "remove finished!" << endl;
     return;
 }
-
-// // Range Scan
-// auto scan(slice<scan_operation*, scan_operation*> op_set) {
-//     int n = op_set.size();
-//     time_start("merge_range");
-//     auto ops =
-//         parlay::sort(op_set, [&](scan_operation s1, scan_operation s2) -> bool {
-//             return (s1.lkey < s2.lkey) ||
-//                    ((s1.lkey == s2.lkey) && (s1.rkey < s2.rkey));
-//         });
-//     auto range_prefix_scan =
-//         parlay::scan(ops, scan_op_rkey_nlt<scan_operation>());
-//     auto range_prefix_sum = parlay::make_slice(range_prefix_scan.first);
-//     auto scan_start_arr = parlay::tabulate(n, [&](size_t i) -> bool {
-//         return (i == 0) || (range_prefix_sum[i].rkey < ops[i].lkey);
-//     });
-//     auto scan_start = parlay::pack_index(scan_start_arr);
-//     int nn = scan_start.size();
-//     auto ops_merged = parlay::tabulate(nn, [&](int i) {
-//         return make_scan_op<scan_operation>(
-//             ops[scan_start[i]].lkey,
-//             ((i != nn - 1) ? range_prefix_sum[scan_start[i + 1]].rkey
-//                            : range_prefix_scan.second.rkey));
-//     });
-    
-//     auto block_nums = parlay::sequence<int64_t>(nn);
-//     uint64_t avg_len = ops[0].rkey - ops[0].lkey;
-//     parfor_wrap(0, nn, [&](size_t i){
-//         uint64_t merge_len;
-//         if(ops_merged[i].rkey >= 0 && ops_merged[i].lkey >= 0)
-//             merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
-//         else if(ops_merged[i].rkey < 0 && ops_merged[i].lkey < 0)
-//             merge_len = ops_merged[i].rkey - ops_merged[i].lkey;
-//          else
-//             merge_len = (uint64_t)(ops_merged[i].rkey) + (uint64_t)(-(ops_merged[i].lkey));
-//         if(merge_len >= (uint64_t)5 * avg_len)
-//             block_nums[i] = merge_len / avg_len + 1;
-//         else
-//             block_nums[i] = 1;
-//     });
-//     auto block_idx_scan = parlay::scan(block_nums);
-//     auto range_tmp = parlay::sequence<scan_operation>(block_idx_scan.second);
-//     if(nn < (n >> 4)) {
-//         for(int i = 0; i < nn; i++) {
-//             if(block_nums[i] > 1) {
-//                 int64_t start_idx = block_idx_scan.first[i];
-//                 int64_t block_size = ops[0].rkey - ops[0].lkey;
-//                 parfor_wrap(0, block_nums[i], [&](int64_t j){
-//                     range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
-//                     range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
-//                     if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
-//                         range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
-//                 });
-//             }
-//             else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
-//         }
-//     }
-//     else {
-//         parfor_wrap(0, nn, [&](int i){
-//             if(block_nums[i] > 1) {
-//                 int64_t start_idx = block_idx_scan.first[i];
-//                 int64_t block_size = ops[0].rkey - ops[0].lkey;
-//                 for(int64_t j = 0; j < block_nums[i]; j++) {
-//                     range_tmp[start_idx + j].lkey = ops_merged[i].lkey + block_size * j;
-//                     range_tmp[start_idx + j].rkey = ops_merged[i].lkey + block_size * (j + 1);
-//                     if(range_tmp[start_idx + j].rkey > ops_merged[i].rkey)
-//                         range_tmp[start_idx + j].rkey = ops_merged[i].rkey;
-//                 }
-//             }
-//             else range_tmp[block_idx_scan.first[i]] = ops_merged[i];
-//         });
-//     }
-//     ops_merged = range_tmp;
-//     nn = block_idx_scan.second;
-//     time_end("merge_range");
-
-//     time_start("find_target");
-//     auto splits = parlay::make_slice(min_key);
-//     auto target = parlay::tabulate(
-//         nn, [&](size_t i) { return find_range_target(ops_merged[i], splits); });
-
-//     IO_Manager* io;
-//     IO_Task_Batch* batch;
-//     auto node_nums = parlay::tabulate(
-//         nn, [&](size_t i) { return (target[i].second - target[i].first + 1); });
-//     auto node_num_prefix_scan = parlay::scan(node_nums);
-//     auto node_num = node_num_prefix_scan.second;
-//     auto target_scan = parlay::sequence<int>(node_num);
-//     auto location = parlay::sequence<int>(node_num);
-//     auto ops_scan = parlay::sequence<L3_scan_task>(node_num);
-//     auto node_num_prefix_sum = parlay::make_slice(node_num_prefix_scan.first);
-//     time_end("find_target");
-
-//     time_nested("taskgen", [&]() {
-//         parlay::parallel_for(0, nn, [&](size_t i) {
-//             for (int j = 0; j < node_nums[i]; j++) {
-//                 target_scan[node_num_prefix_sum[i] + j] = target[i].first + j;
-//                 ops_scan[node_num_prefix_sum[i] + j] =
-//                     make_scan_op<L3_scan_task>(ops_merged[i].lkey,
-//                                                ops_merged[i].rkey);
-//             }
-//         });
-//         io = alloc_io_manager();
-//         io->init();
-//         batch = io->alloc<L3_scan_task, L3_scan_reply>(direct);
-//         time_nested("push_task", [&]() {
-//             batch->push_task_from_array_by_isort<false>(
-//                 node_num, [&](size_t i) { return ops_scan[i]; },
-//                 make_slice(target_scan), make_slice(location));
-//         });
-//         io->finish_task_batch();
-//     });
-
-//     time_nested("exec", [&]() { ASSERT(io->exec()); });
-
-//     time_start("get_result");
-//     auto kv_nums = parlay::tabulate(node_num, [&](size_t i) {
-//         auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
-//         return (reply->length);
-//     });
-//     auto kv_nums_prefix_scan = parlay::scan(kv_nums);
-//     auto kv_num = kv_nums_prefix_scan.second;
-//     auto kv_nums_prefix_sum = parlay::make_slice(kv_nums_prefix_scan.first);
-//     auto kv_set1 = parlay::sequence<key_value>(kv_num);
-//     parlay::parallel_for(0, node_num, [&](size_t i) {
-//         auto reply = (L3_scan_reply*)batch->ith(target_scan[i], location[i]);
-//         for (int j = 0; j < kv_nums[i]; j++) {
-//             kv_set1[kv_nums_prefix_sum[i] + j].key = reply->vals[j];
-//             kv_set1[kv_nums_prefix_sum[i] + j].value =
-//                 reply->vals[j + reply->length];
-//         }
-//     });
-//     time_end("get_result");
-//     io->reset();
-
-//     time_start("reassemble_result");
-//     parlay::sort_inplace(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-//         return (kv1.key < kv2.key) ||
-//                ((kv1.key == kv2.key) && (kv1.value < kv2.value));
-//     });
-//     auto kv_set =
-//         parlay::unique(kv_set1, [&](key_value kv1, key_value kv2) -> bool {
-//             return (kv1.key == kv2.key);
-//         });
-//     auto kv_n = kv_set.size();
-//     auto index_set = parlay::tabulate(n, [&](size_t i) {
-//         int ll = 0, rr = kv_n;
-//         int64_t lkey = op_set[i].lkey, rkey = op_set[i].rkey;
-//         int mid, res_ll, res_rr;
-//         while (rr - ll > 1) {
-//             mid = (ll + rr) >> 1;
-//             if (lkey >= kv_set[mid].key)
-//                 ll = mid;
-//             else if (rkey < kv_set[mid].key)
-//                 rr = mid;
-//             else {
-//                 break;
-//             }
-//         }
-//         int lll = ll, rrr = rr, mmm = mid;
-
-//         ll = lll;
-//         rr = mmm;
-//         while (rr - ll > 1) {
-//             mid = (ll + rr) >> 1;
-//             if (lkey < kv_set[mid].key)
-//                 rr = mid;
-//             else
-//                 ll = mid;
-//         }
-//         if (lkey <= kv_set[ll].key)
-//             res_ll = ll;
-//         else
-//             res_ll = ll + 1;
-
-//         ll = mmm;
-//         rr = rrr;
-//         while (rr - ll > 1) {
-//             mid = (ll + rr) >> 1;
-//             if (rkey <= kv_set[mid].key)
-//                 rr = mid;
-//             else
-//                 ll = mid;
-//         }
-//         if (ll >= kv_n - 1)
-//             res_rr = kv_n;
-//         else if (kv_set[ll + 1].key <= rkey)
-//             res_rr = ll + 2;
-//         else
-//             res_rr = ll + 1;
-//         return std::make_pair(res_ll, res_rr);
-//     });
-//     time_end("reassemble_result");
-//     return make_pair(kv_set, index_set);
-// }
-// };  // namespace pim_skip_list
 
 // Range Scan
 auto scan(slice<scan_operation*, scan_operation*> op_set) {
