@@ -71,11 +71,6 @@ TASK(dpu_init_task, 501, true, sizeof(dpu_init_task), {
     int64_t dpu_id;
 })
 
-// #define L3_GET_REP 7
-// typedef struct {
-//     int64_t result;
-// } L3_get_reply;
-
 // Range Scan
 TASK(L3_scan_task, 20, true, sizeof(L3_scan_task), {
     int64_t lkey;

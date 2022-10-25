@@ -17,17 +17,12 @@ namespace pim_skip_list {
 
 bool init_state = false;
 
-// static int64_t key_split[NR_DPUS + 10];
-// static int64_t min_key[NR_DPUS + 10];
 parlay::sequence<int64_t> key_split;
 parlay::sequence<int64_t> min_key;
 int max_height = MAX_L3_HEIGHT - 1;
 
 const int64_t KEY_RANGE_MIN = INT64_MIN;
 const uint64_t KEY_RANGE_SIZE = UINT64_MAX;
-
-// const int64_t KEY_RANGE_MIN = 0;
-// const uint64_t KEY_RANGE_SIZE = ((((((((((25ull << 5) + 25) << 5) + 25) << 5) + 25) << 5) + 25) + 1) << (15 + 23)) - 1;
 
 void init_splits() {
     printf("\n********** INIT SPLITS **********\n");
@@ -37,16 +32,11 @@ void init_splits() {
     key_split[0] = KEY_RANGE_MIN;
     for (int i = 1; i < nr_of_dpus; i++) {
         key_split[i] = key_split[i - 1] + split;
-        // cout<<key_split[i]<<endl;
     }
     for (int i = 0; i < nr_of_dpus - 1; i++) {
         min_key[i] = key_split[i + 1];
     }
-    // for (int i = 0; i < nr_of_dpus; i ++) {
-    //     printf("split[%d]=%lld\n", i, key_split[i]);
-    // }
     min_key[nr_of_dpus - 1] = INT64_MAX;
-    // key_split[nr_of_dpus] = INT64_MAX;
 }
 
 void init_skiplist() {
@@ -70,11 +60,8 @@ void init_skiplist() {
 }
 
 void init() {
-    // init_dpus();
-    // init_splits();
     time_nested("init splits", init_splits);
     time_nested("init_skiplist", init_skiplist);
-    // init_skiplist();
 }
 
 // Range Scan
@@ -131,9 +118,6 @@ void find_targets(slice<IntIterator1, IntIterator1> in,
                 while (starts[i] < n && in[starts[i]] < split[i]) {
                     starts[i]++;
                 }
-                // if (starts[i] < n) {
-                //     target[starts[i]] = i;
-                // }
             },
             1024 / log2_up(n));
     });
@@ -183,23 +167,14 @@ auto get(slice<int64_t*, int64_t*> keys) {
     time_end("get_result");
     io->reset();
     return result;
-    // return false;
-
-    // assert(false);
-    // key_value x;
-    // return parlay::sequence<key_value>(ops.size(), x);
-    // return false;
 }
+
 void update(slice<key_value*, key_value*> ops) {
     (void)ops;
     assert(false);
-    // return false;
 }
+
 auto predecessor(slice<int64_t*, int64_t*> keys) {
-    // dpu_control::print_log([&](size_t i) {
-    //     return i < 10;
-    // });
-    // exit(0);
     int n = keys.size();
     auto splits = make_slice(min_key);
 
@@ -207,16 +182,6 @@ auto predecessor(slice<int64_t*, int64_t*> keys) {
     auto target = parlay::tabulate(
         n, [&](size_t i) { return find_target(keys[i], splits); });
     time_end("find_target");
-
-    // auto tmpcount = parlay::sequence(nr_of_dpus, 0);
-    // for (int i = 0; i < keys.size(); i ++) {
-    //     tmpcount[target[i]] ++;
-    // }
-    // int maxcount = 0;
-    // for (int i = 0; i < nr_of_dpus; i ++) {
-    //     maxcount = max(maxcount, tmpcount[i]);
-    // }
-    // printf("count: %d/%d, %lf\n", maxcount, n, (double)maxcount * nr_of_dpus / n);
 
     IO_Manager* io;
     IO_Task_Batch* batch;
@@ -261,17 +226,6 @@ void insert(slice<key_value*, key_value*> kvs) {
     printf("n=%d\n", n);
     printf("kvs.size=%d\n", (int)kvs.size());
 
-    // for (int i = 0; i < n; i += 1000) {
-    //     cout<<i<<'\t'<<kvs[i].key<<'\t'<<kvs[i].value<<endl;
-    // }
-    // exit(0);
-
-    // parlay::sequence<key_value> kv_sorted;
-    // time_nested("sort", [&]() {
-    //     kv_sorted =
-    //         parlay::sort(kvs, [](auto t1, auto t2) { return t1.key < t2.key; });
-    // });
-
     auto keys_sorted = parlay::delayed_seq<int64_t>(
         n, [&](size_t i) { return kv_sorted[i].key; });
 
@@ -283,33 +237,6 @@ void insert(slice<key_value*, key_value*> kvs) {
         find_targets(make_slice(keys_sorted), make_slice(target),
                      make_slice(key_split));
     });
-    // for (int i = 0; i < n; i ++) {
-    //     int t = target[i];
-    //     if (!((key_split[t] <= keys_sorted[i]) && (keys_sorted[i] < min_key[t]))) {
-    //         printf("%d\t%lld\t%lld\t%lld\n", t, key_split[t], keys_sorted[i], min_key[t]);
-    //         assert(false);
-    //     }
-    // }
-    // for (int i = 0; i < n; i ++) {
-    //     int t = target[i];
-    //     assert(key_split[t] <= keys_sorted[i]);
-    //     assert(keys_sorted[i] < min_key[t]);
-    // }
-
-    // for (int i = 0; i < n; i += 1000) {
-    //     printf("%d %d\n", i, target[i]);
-    // }
-    // exit(0);
-
-    // auto tmpcount = parlay::sequence(nr_of_dpus, 0);
-    // for (int i = 0; i < keys_sorted.size(); i ++) {
-    //     tmpcount[target[i]] ++;
-    // }
-    // int maxcount = 0;
-    // for (int i = 0; i < nr_of_dpus; i ++) {
-    //     maxcount = max(maxcount, tmpcount[i]);
-    // }
-    // printf("count: %d/%d, %lf\n", maxcount, n, (double)maxcount * nr_of_dpus / n);
 
     auto heights = parlay::sequence<int>(n);
     time_nested("init height", [&]() {
@@ -364,12 +291,7 @@ void insert(slice<key_value*, key_value*> kvs) {
         }
     });
 
-    // for (int i = 0; i < nr_of_dpus; i ++) {
-    //     printf("%d\t%lld\t%lld\n", i, key_split[i], min_key[i]);
-    // }
-
     io->reset();
-    // exit(0);
     return;
 }
 
@@ -378,8 +300,6 @@ void remove(slice<int64_t*, int64_t*> keys) {
 
     time_nested("sort", [&]() { parlay::sort_inplace(keys); });
 
-    // parlay::sequence<int64_t> keys_sorted;
-    // time_nested("sort", [&]() { keys_sorted = parlay::sort(keys); });
     auto keys_sorted =
         parlay::pack(keys, parlay::delayed_seq<bool>(n, [&](size_t i) {
                          return (i == 0) || (keys[i] != keys[i - 1]);
@@ -395,12 +315,6 @@ void remove(slice<int64_t*, int64_t*> keys) {
         find_targets(make_slice(keys_sorted), make_slice(target),
                      make_slice(key_split));
     });
-
-    // cout << n << endl;
-    // for (int i = 0; i < n; i += 1000) {
-    //     cout << i << ' ' << keys_sorted[i] << ' ' << target[i] << endl;
-    // }
-    // assert(false);
 
     auto location = parlay::sequence<int>(n);
     time_nested("taskgen", [&]() {

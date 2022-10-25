@@ -44,7 +44,6 @@ void wram_heap_save() {
     }
 
     if (saveAddr == NULL_pt(mpuint8_t)) saveAddr = wram_heap_save_addr_tmp;
-    // mram_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
     m_write(&heapInfo, (mpuint8_t)saveAddr, sizeof(WRAMHeap));
     wram_heap_save_addr = saveAddr;
 }
@@ -59,13 +58,9 @@ void wram_heap_init() {
 void wram_heap_load() {
     mpuint8_t saveAddr = wram_heap_save_addr;
     if (saveAddr == NULL_pt(mpuint8_t)) {
-        // printf("%d\n", (int)send_varlen_buffer_tmp);
-        // exit(0);
-        // EXIT();
         wram_heap_init();
     } else {
         WRAMHeap heapInfo;
-        // mram_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
         m_read((mpuint8_t)saveAddr, &heapInfo, sizeof(WRAMHeap));
         DPU_ID = heapInfo.DPU_ID;
         for (int i = 0; i < NR_TASKLETS; i++) {

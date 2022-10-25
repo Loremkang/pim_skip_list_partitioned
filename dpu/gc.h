@@ -43,7 +43,6 @@ pptr alloc_node(int height, uint32_t n) { // return (num_node_get, gcnodeaddr)
     IN_DPU_ASSERT(n > 0, "alloc node invalid n");
     pptr addr = free_list_l3node[height].size_addr;
     if (addr.id >= n) { // have more nodes than requied
-        // gcnode curnode = free_list_l3node[height];
         mgcptr nxt = (mgcptr)free_list_l3node[height].size_addr.addr;
         pptr ret = PPTR(n, nxt);
         for (uint32_t i = 0; i < n; i ++) {

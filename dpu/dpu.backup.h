@@ -1,33 +1,3 @@
-/*
- * Copyright (c) 2014-2017 - uPmem
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * An example of checksum computation with multiple tasklets.
- *
- * Every tasklet processes specific areas of the MRAM, following the "rake"
- * strategy:
- *  - Tasklet number T is first processing block number TxN, where N is a
- *    constant block size
- *  - It then handles block number (TxN) + (NxM) where M is the number of
- *    scheduled tasklets
- *  - And so on...
- *
- * The host is in charge of computing the final checksum by adding all the
- * individual results.
- */
 #include <stdint.h>
 #include <stdio.h>
 #include <defs.h>
@@ -46,11 +16,6 @@
 BARRIER_INIT(init_barrier, NR_TASKLETS);
 BARRIER_INIT(end_barrier, NR_TASKLETS);
 
-// __host volatile int host_barrier;
-
-// __host int num_tasklets;
-// __host uint64_t task_type;
-
 // DPU ID
 __host int64_t DPU_ID = -1;
 
@@ -65,10 +30,7 @@ uint32_t *newnode_size;
 
 // Node Buffers & Hash Tables
 // L3
-
-
 __host mL3ptr root;
-
 __host __mram_ptr uint64_t* receive_buffer_offset;
 
 // send
@@ -96,7 +58,6 @@ void execute(int l, int r) {
     uint32_t tasklet_id = me();
     int length = r - l;
     
-    // printf("EXEC ");
     __mram_ptr int64_t* buffer_type = (__mram_ptr int64_t*)send_buffer;
     *buffer_type = BUFFER_FIXED_LENGTH; // default
 
@@ -120,42 +81,29 @@ void execute(int l, int r) {
         }
 
         case L3_INSERT_TSK: {
-            // int64_t* keys = mem_alloc(sizeof(int64_t) * length);
-            // pptr* addrs = mem_alloc(sizeof(pptr) * length);
-            // int8_t* heights = mem_alloc(sizeof(int8_t) * length);
-
             __mram_ptr L3_insert_task* mram_tit =
                 (__mram_ptr L3_insert_task*)receive_task_start;
             mram_tit += l;
 
             newnode_size[tasklet_id] = 0;
             for (int i = 0; i < length; i++) {
-            //     keys[i] = tit->key;
-            //     addrs[i] = tit->addr;
-            //     heights[i] = tit->height;
                 int height = mram_tit[i].height;
                 newnode_size[tasklet_id] += L3_node_size(height);
-            //     tit = seqread_get(tit, sizeof(L3_insert_task), &sr);
                 IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
                               "execute: invalid height\n");
             }
 
             mL3ptr* right_predecessor_shared = bufferA_shared;
             mL3ptr* right_newnode_shared = bufferB_shared;
-            // L3_insert_parallel(length, l, keys, heights, addrs, newnode_size,
-            //                    max_height_shared, right_predecessor_shared,
-            //                    right_newnode_shared);
             L3_insert_parallel(length, l, mram_tit, newnode_size, max_height_shared,
                                right_predecessor_shared, right_newnode_shared);
             break;
         }
 
         case L3_REMOVE_TSK: {
-            // int64_t* keys = mem_alloc(sizeof(int64_t) * length);
             __mram_ptr L3_remove_task* mram_trt =
                 (__mram_ptr L3_remove_task*)receive_task_start;
             mram_trt += l;
-            // mram_read(trt, keys, sizeof(int64_t) * length);
 
             mL3ptr* left_node_shared = bufferA_shared;
             L3_remove_parallel(length, l, mram_trt, max_height_shared,
@@ -166,7 +114,6 @@ void execute(int l, int r) {
         case L3_SEARCH_TSK: {
             __mram_ptr L3_search_task* tst =
                 (__mram_ptr L3_search_task*)receive_task_start;
-            // int64_t* val = mem_alloc(sizeof(int64_t) * length);
             tst += l;
 
             __mram_ptr L3_search_reply* dst =
@@ -178,7 +125,6 @@ void execute(int l, int r) {
                 L3_search_reply tsr = (L3_search_reply){.result_key = value};
                 mram_write(&tsr, &dst[l + i], sizeof(int64_t));
             }
-            // printf("tid=%d maxstep=%d\n", tasklet_id, maxstep);
             break;
         }
 
@@ -211,7 +157,6 @@ int main() {
     uint32_t tasklet_id = me();
 
     if (tasklet_id == 0) {
-        // DPU_SEND_BUFFER_SIZE = DPU_SEND_BUFFER_TASK_COUNT = 0;
         mem_reset();
 
         bufferA_shared =
@@ -242,7 +187,6 @@ int main() {
 
     execute(lft, rt);
 
-    // barrier_wait(&end_barrier);
     if (tasklet_id == 0) {
         printf("epoch=%lld l3cnt=%d l3htcnt=%d\n", dpu_epoch_number, l3cnt,
                l3htcnt);

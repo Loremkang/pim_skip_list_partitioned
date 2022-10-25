@@ -7,14 +7,6 @@
 #include "pptr.h"
 #include "macro.h"
 
-// typedef struct L3node {
-//     int64_t size;
-//     int64_t height;
-//     pptr up, left, right;
-//     int64_t keys[DB_SIZE];
-//     mpvoid addrs[DB_SIZE];
-// } L3node;
-
 typedef struct L3node {
     int64_t key;
     int64_t height;

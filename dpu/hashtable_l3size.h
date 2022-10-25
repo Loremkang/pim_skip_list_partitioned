@@ -4,8 +4,6 @@
 #include <mutex.h>
 #include "common.h"
 #include "node_dpu.h"
-// #include "task_framework_dpu.h"
-// #include "garbage_collection.h"
 
 typedef struct ht_slot {
     uint32_t pos;  // ideal position in the hash table
@@ -14,8 +12,6 @@ typedef struct ht_slot {
 
 #define null_ht_slot ((ht_slot){.pos = 0, .v = 0})
 
-
-// #define LX_HASHTABLE_SIZE (1 << 10)
 // L3
 MUTEX_INIT(get_new_L3_lock);
 MUTEX_INIT(ht_lock);
@@ -36,7 +32,6 @@ static inline void storage_init() {
     for (int i = 0; i < LX_HASHTABLE_SIZE; i++) {
         l3ht[i] = hs;
     }
-    // L3_gc_init();
 }
 static inline void ht_insert(__mram_ptr ht_slot* ht, int* cnt, int32_t pos,
                              uint32_t val) {
@@ -100,7 +95,6 @@ static inline uint32_t ht_search(__mram_ptr ht_slot* ht, int64_t key,
         int v = filter(hs, key);
         if (v == -1) {  // empty slot
             return INVALID_DPU_ADDR;
-            // continue;
         } else if (v == 0) {  // incorrect value
             pos = (pos + 1) & (LX_HASHTABLE_SIZE - 1);
         } else if (v == 1) {  // correct value;
@@ -123,27 +117,20 @@ static inline L3node* init_L3(int64_t key, int64_t value, int height,
     nn->height = height;
     nn->left = (mppptr)(maddr + sizeof(L3node));
     nn->right = (mppptr)(maddr + sizeof(L3node) + sizeof(pptr) * height);
-    // for (int i = 0; i < sizeof(pptr) * height * 2; i ++) {
-    //     buffer[sizeof(L3node) + i] = (uint8_t)-1;
-    // }
     memset(buffer + sizeof(L3node), -1, sizeof(pptr) * height * 2);
     return nn;
 }
 
 static inline __mram_ptr void* reserve_space_L3(uint32_t size) {
-    // mutex_lock(get_new_L3_lock);
     __mram_ptr void* ret = l3buffer + l3cnt;
     l3cnt += size;
-    // mutex_unlock(get_new_L3_lock);
     return ret;
 }
 
 static inline mL3ptr get_new_L3(int64_t key, int64_t value, int height, __mram_ptr void* maddr) {
     int size = L3_node_size(height);
-    // __mram_ptr void* maddr = reserve_space_L3(size);
     uint8_t buffer[sizeof(L3node) + sizeof(pptr) * 2 * MAX_L3_HEIGHT];
     L3node* nn = init_L3(key, value, height, buffer, maddr);
-    // mram_write((void*)nn, maddr, size);
     m_write((void*)nn, maddr, size);
     ht_insert(l3ht, &l3htcnt, hash_to_addr(key, LX_HASHTABLE_SIZE),
               (uint32_t)maddr);

@@ -1,33 +1,3 @@
-/*
- * Copyright (c) 2014-2017 - uPmem
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * An example of checksum computation with multiple tasklets.
- *
- * Every tasklet processes specific areas of the MRAM, following the "rake"
- * strategy:
- *  - Tasklet number T is first processing block number TxN, where N is a
- *    constant block size
- *  - It then handles block number (TxN) + (NxM) where M is the number of
- *    scheduled tasklets
- *  - And so on...
- *
- * The host is in charge of computing the final checksum by adding all the
- * individual results.
- */
 #include <defs.h>
 #include <mram.h>
 #include <alloc.h>
@@ -38,7 +8,6 @@
 #include "driver.h"
 #include "task.h"
 #include "l3.h"
-// #include "node_dpu.h"
 #include "task_framework_dpu.h"
 
 void *bufferA_shared, *bufferB_shared;
@@ -55,9 +24,6 @@ static inline void dpu_init(dpu_init_task *it) {
     DPU_ID = it->dpu_id;
     l3cnt = 8;
     storage_init();
-    // printf("id=%d\n", (int)DPU_ID);
-    // printf("size=%d\n", sizeof(L3node));
-    // storage_init();
 }
 
 void exec_dpu_init_task(int lft, int rt) {
@@ -110,53 +76,31 @@ void exec_L3_insert_task(int lft, int rt) {
     init_block_with_type(L3_insert_task, empty_task_reply);
 
     int n = rt - lft;
-    // int tid = me();
-    // EXIT();
 
     __mram_ptr L3_insert_task* mram_tit =
         (__mram_ptr L3_insert_task*)recv_block_tasks;
     mram_tit += lft;
 
-    // newnode_size[tid] = 0;
     int dedup_start = 0;
     for (int i = 0; i < n; i ++) {
         L3_insert_task tt;
-        // mram_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
         m_read(&mram_tit[i], &tt, sizeof(L3_insert_task));
         int64_t k = tt.key;
         mL3ptr nn;
         bool succeed = L3_get_ml3ptr(k, &nn);
-        // bool succeed = 0;
-        // if (i < 10) {
-        //     printf("%d\t%llx\t%d\t%x\n", i, k, succeed, nn);
-        // }
         if (!succeed) {
-            // mram_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
             m_write(&tt, mram_tit + dedup_start, sizeof(L3_insert_task));
             dedup_start ++;
         } else {
-            // mram_write(&tt.value, &(nn->value), sizeof(int64_t));
             nn->value = tt.value;
         }
     }
-    // printf("%d\n", dedup_start);
     n = dedup_start;
-    // EXIT();
-    // return;
-
-    // for (int i = 0; i < n; i++) {
-    //     int height = mram_tit[i].height;
-    //     newnode_size[tid] += L3_node_size(height);
-    //     IN_DPU_ASSERT(height > 0 && height < MAX_L3_HEIGHT,
-    //                     "execute: invalid height\n");
-    // }
 
     mL3ptr* right_predecessor_shared = bufferA_shared;
     mL3ptr* right_newnode_shared = bufferB_shared;
     L3_insert_parallel(n, lft, mram_tit, max_height_shared,
                         right_predecessor_shared, right_newnode_shared);
-    // L3_insert_parallel(n, lft, mram_tit, newnode_size, max_height_shared,
-    //                     right_predecessor_shared, right_newnode_shared);
 }
 
 void exec_L3_remove_task(int lft, int rt) {
@@ -255,7 +199,6 @@ void execute(int lft, int rt) {
 }
 
 void init() {
-    // printf("l3cnt=%d l3htcnt=%d\n", l3cnt, l3htcnt);
     bufferA_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
     bufferB_shared = mem_alloc(sizeof(mL3ptr) * NR_TASKLETS * MAX_L3_HEIGHT);
     max_height_shared = mem_alloc(sizeof(int8_t) * NR_TASKLETS);

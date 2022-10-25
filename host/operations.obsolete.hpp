@@ -14,7 +14,6 @@
 
 using namespace std;
 
-extern bool print_debug;
 extern int64_t epoch_number;
 
 int maxheight; // setting max height
@@ -239,9 +238,4 @@ void remove(int length, int64_t* remove_keys) {
     remove_task_generate.end();
 
     ASSERT(!exec());
-    // buffer_state = idle;
-    // if (print_debug) {
-    //     print_log();
-    // }
-    // exit(-1);
 }
